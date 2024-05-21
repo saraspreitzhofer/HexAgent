@@ -1,6 +1,7 @@
 # stupid example
 def agent(board, action_set):
-    return action_set[0]    # todo!
+    return action_set[0]  # todo!
+
 
 # Here should be the necessary Python wrapper for your model, in the form of a callable agent, such as above.
 # Please make sure that the agent does actually work with the provided Hex module.
@@ -10,6 +11,7 @@ import numpy as np
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.layers import Input, Conv2D, Dense, Flatten
 from tensorflow.keras import models
+
 
 class Node:
     def __init__(self, state, parent=None, action=None, prior=0):
@@ -44,6 +46,7 @@ class Node:
     def value(self):
         epsilon = 1e-6  # Small value to prevent division by zero
         return self.value_sum / (self.visit_count + epsilon) + self.prior
+
 
 class MCTS:
     def __init__(self, model, simulations):

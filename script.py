@@ -9,7 +9,7 @@ from tensorflow.keras.models import load_model
 
 
 def load_model_from_folder(model_folder):
-    model_path = os.path.join(model_folder, 'best_hex_model.h5')
+    model_path = os.path.join(model_folder, 'best_hex_model.keras')
     return load_model(model_path)
 
 

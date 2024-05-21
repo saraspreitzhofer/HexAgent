@@ -36,18 +36,16 @@ def select_device():
 
 
 def save_results(losses, win_rates, model_folder):
-    epochs = range(1, len(losses['policy']) + 1)
+    epochs = range(1, len(losses) + 1)
 
     plt.figure(figsize=(12, 6))
 
     plt.subplot(1, 2, 1)
-    plt.plot(epochs, losses['policy'], label='Policy Loss')
-    plt.plot(epochs, losses['value'], label='Value Loss')
+    plt.plot(epochs, losses, label='Loss')
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     plt.legend()
     plt.title('Loss over Epochs')
-    plt.savefig(os.path.join(model_folder, 'losses.png'))
 
     plt.subplot(1, 2, 2)
     plt.plot(epochs, win_rates, label='Win Rate')
@@ -55,7 +53,7 @@ def save_results(losses, win_rates, model_folder):
     plt.ylabel('Win Rate')
     plt.legend()
     plt.title('Win Rate over Epochs')
-    plt.savefig(os.path.join(model_folder, 'win_rate.png'))
+    plt.savefig(os.path.join(model_folder, 'loss_and_win_rate.png'))
 
     plt.close()
 
@@ -76,7 +74,7 @@ def train_model(board_size=7, epochs=10, simulations=100, num_games_per_epoch=10
     model_folder = os.path.join(models_folder, current_time)
     os.makedirs(model_folder)
 
-    losses = {'policy': [], 'value': []}
+    losses = []
     win_rates = []
 
     for epoch in range(epochs):
@@ -108,27 +106,23 @@ def train_model(board_size=7, epochs=10, simulations=100, num_games_per_epoch=10
         print(f"Training model for Epoch {epoch + 1}/{epochs}")
         history = model.fit(states, [policies, values], epochs=1, verbose=0)
 
-        print(history.history)
-
-        policy_loss = history.history['policy_output_loss'][0]
-        value_loss = history.history['value_output_loss'][0]
-        losses['policy'].append(policy_loss)
-        losses['value'].append(value_loss)
+        loss = history.history['loss'][0]
+        losses.append(loss)
 
         win_rate = wins / num_games_per_epoch
         win_rates.append(win_rate)
 
-        if policy_loss + value_loss < best_loss:
-            best_loss = policy_loss + value_loss
-            model.save(os.path.join(model_folder, 'best_hex_model.h5'))
+        if loss < best_loss:
+            best_loss = loss
+            model.save(os.path.join(model_folder, 'best_hex_model.keras'))
             print("Saved best model with loss:", best_loss)
 
         print(
-            f"Completed Epoch {epoch + 1}/{epochs} with policy loss: {policy_loss}, value loss: {value_loss}, win rate: {win_rate}")
+            f"Completed Epoch {epoch + 1}/{epochs} with loss: {loss}, win rate: {win_rate}")
 
     save_results(losses, win_rates, model_folder)
 
 
 if __name__ == "__main__":
     select_device()
-    train_model(board_size=7, epochs=2, simulations=2, num_games_per_epoch=2)
+    train_model(board_size=7, epochs=10, simulations=2, num_games_per_epoch=2)
