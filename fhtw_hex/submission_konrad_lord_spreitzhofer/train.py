@@ -3,11 +3,8 @@ import os
 import copy
 import matplotlib.pyplot as plt
 import tensorflow as tf
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Conv2D, Dense, Flatten
-from tensorflow.keras.optimizers import Adam
-from hex_engine import HexPosition
-from mcts_nn import MCTS, create_model
+from fhtw_hex.hex_engine import HexPosition
+from facade import MCTS, create_model
 from tqdm import tqdm
 from datetime import datetime
 
@@ -15,8 +12,9 @@ from datetime import datetime
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 tf.get_logger().setLevel('ERROR')
 
+
 def select_device():
-    print("Select device for training:")
+    """print("Select device for training:")
     print("1. GPU (if available)")
     print("2. CPU")
     choice = input("Enter 1 or 2: ")
@@ -28,7 +26,14 @@ def select_device():
             print("Using GPU for training.")
     else:
         print("Using CPU for training.")
+        tf.config.set_visible_devices([], 'GPU')"""
+
+    if not tf.config.list_physical_devices('GPU'):
+        print("No GPU found, using CPU instead.")
+    else:
+        print("Using CPU for training.")
         tf.config.set_visible_devices([], 'GPU')
+
 
 def save_results(losses, win_rates, model_folder):
     epochs = range(1, len(losses['policy']) + 1)
@@ -54,7 +59,8 @@ def save_results(losses, win_rates, model_folder):
 
     plt.close()
 
-def train_model(board_size=11, epochs=10, simulations=100, num_games_per_epoch=10):
+
+def train_model(board_size=7, epochs=10, simulations=100, num_games_per_epoch=10):
     print("Creating model...")
     model = create_model(board_size)
     mcts = MCTS(model, simulations)
@@ -102,6 +108,8 @@ def train_model(board_size=11, epochs=10, simulations=100, num_games_per_epoch=1
         print(f"Training model for Epoch {epoch + 1}/{epochs}")
         history = model.fit(states, [policies, values], epochs=1, verbose=0)
 
+        print(history.history)
+
         policy_loss = history.history['policy_output_loss'][0]
         value_loss = history.history['value_output_loss'][0]
         losses['policy'].append(policy_loss)
@@ -120,6 +128,7 @@ def train_model(board_size=11, epochs=10, simulations=100, num_games_per_epoch=1
 
     save_results(losses, win_rates, model_folder)
 
+
 if __name__ == "__main__":
     select_device()
-    train_model(board_size=11, epochs=2, simulations=2, num_games_per_epoch=2)
+    train_model(board_size=7, epochs=2, simulations=2, num_games_per_epoch=2)

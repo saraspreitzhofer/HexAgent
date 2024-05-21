@@ -1,9 +1,15 @@
-import numpy as np
-import tensorflow as tf
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Conv2D, Dense, Flatten
-from tensorflow.keras.optimizers import Adam
+# stupid example
+def agent(board, action_set):
+    return action_set[0]    # todo!
+
+# Here should be the necessary Python wrapper for your model, in the form of a callable agent, such as above.
+# Please make sure that the agent does actually work with the provided Hex module.
+
 from copy import deepcopy
+import numpy as np
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.layers import Input, Conv2D, Dense, Flatten
+from tensorflow.keras import models
 
 class Node:
     def __init__(self, state, parent=None, action=None, prior=0):
@@ -67,6 +73,7 @@ class MCTS:
         policy, value = self.model.predict(board, verbose=0)
         return policy[0], value[0][0]
 
+
 def create_model(board_size):
     inputs = Input(shape=(board_size, board_size, 1))
     x = Conv2D(32, (3, 3), padding='same', activation='relu')(inputs)
@@ -74,6 +81,6 @@ def create_model(board_size):
     x = Flatten()(x)
     policy = Dense(board_size * board_size, activation='softmax', name='policy_output')(x)
     value = Dense(1, activation='tanh', name='value_output')(x)
-    model = Model(inputs=inputs, outputs=[policy, value])
+    model = models.Model(inputs=inputs, outputs=[policy, value])
     model.compile(loss=['categorical_crossentropy', 'mean_squared_error'], optimizer=Adam(learning_rate=0.001))
     return model

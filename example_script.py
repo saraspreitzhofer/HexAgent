@@ -5,9 +5,9 @@ import sys
 # importing the module
 from fhtw_hex import hex_engine as engine
 # this is how your agent can be imported
-# 'submission' is the (sub)package that you provide
+# 'submission_konrad_lord_spreitzhofer' is the (sub)package that you provide
 # please use a better name that identifies your group
-from fhtw_hex.submission.facade import agent
+from fhtw_hex.submission_konrad_lord_spreitzhofer.facade import agent
 
 # sys.path.append("/home/sharwin/Desktop/rl_ss_2023/")
 
