@@ -1,5 +1,6 @@
 # Byte-compiled / optimized / DLL files
-/**/models/
+/**/models/*
+!/**/models/final
 /**/.idea/
 
 __pycache__/
