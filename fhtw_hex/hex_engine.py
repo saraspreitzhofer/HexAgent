@@ -3,6 +3,8 @@
 # random
 # pickle
 # Of the above only 'copy' is necessary for basic functionality
+from fhtw_hex.submission_konrad_lord_spreitzhofer import config
+
 
 class HexPosition(object):
     """
@@ -22,7 +24,7 @@ class HexPosition(object):
         A list of board-state arrays. Stores the history of play.    
     """
 
-    def __init__(self, size=7):
+    def __init__(self, size=config.BOARD_SIZE):  # todo change to 7 for the final submission
         # enforce lower and upper bound on size
         size = max(2, min(size, 26))
         # attributes encoding a game state

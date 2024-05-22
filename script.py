@@ -5,12 +5,13 @@ from fhtw_hex import hex_engine as engine
 from fhtw_hex.submission_konrad_lord_spreitzhofer.facade import agent
 from fhtw_hex.submission_konrad_lord_spreitzhofer.facade import MCTS
 import os
-from tensorflow.keras.models import load_model
+from tensorflow.keras import models
+from fhtw_hex.submission_konrad_lord_spreitzhofer import config
 
 
 def load_model_from_folder(model_folder):
     model_path = os.path.join(model_folder, 'best_hex_model.keras')
-    return load_model(model_path)
+    return models.load_model(model_path)
 
 
 def display_board(game):
@@ -19,7 +20,7 @@ def display_board(game):
     print(f"Current winner: {game.winner}")
 
 
-def human_vs_agent(board_size=7, simulations=100, model_folder=None):
+def human_vs_agent(board_size=config.BOARD_SIZE, simulations=100, model_folder=None):
     game = engine.HexPosition(board_size)
     model = load_model_from_folder(model_folder)
     mcts = MCTS(model, simulations)
@@ -50,8 +51,8 @@ def human_vs_agent(board_size=7, simulations=100, model_folder=None):
     print(f"{'White' if game.winner == 1 else 'Black'} wins!")
 
 
-model_dir = 'models'
-model_folders = [f for f in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, f))]
+model_dir = 'fhtw_hex/submission_konrad_lord_spreitzhofer/models'
+"""model_folders = [f for f in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, f))]
 if not model_folders:
     print("No models found. Please train a model first.")
 else:
@@ -61,8 +62,9 @@ else:
     choice = int(input("Enter the number of the model you want to select: ")) - 1
     selected_model_folder = os.path.join(model_dir, model_folders[choice])
 
-    human_vs_agent(simulations=1, model_folder=selected_model_folder)
+    human_vs_agent(simulations=1, model_folder=selected_model_folder)"""
 
+selected_model_folder = os.path.join(model_dir, "final")
 
 # initializing a game object
 game = engine.HexPosition()
@@ -71,8 +73,14 @@ game = engine.HexPosition()
 # method-calls are error-free and as expected
 
 # let your agent play against random
+print("Agent against random")
 game.machine_vs_machine(machine1=agent, machine2=None)
+print("Random against agent")
 game.machine_vs_machine(machine1=None, machine2=agent)
 
 # let your agent play against itself
+print("Agent against agent")
 game.machine_vs_machine(machine1=agent, machine2=agent)
+
+print("Human against agent")
+game.human_vs_machine()

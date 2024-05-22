@@ -3,10 +3,11 @@ import os
 import copy
 import matplotlib.pyplot as plt
 import tensorflow as tf
-from fhtw_hex.hex_engine import HexPosition
+from fhtw_hex import hex_engine as engine
 from facade import MCTS, create_model
 from tqdm import tqdm
 from datetime import datetime
+import config
 
 # Suppress TensorFlow logs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -58,10 +59,10 @@ def save_results(losses, win_rates, model_folder):
     plt.close()
 
 
-def train_model(board_size=7, epochs=10, simulations=100, num_games_per_epoch=10):
+def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_per_epoch=config.NUM_OF_GAMES_PER_EPOCH):
     print("Creating model...")
     model = create_model(board_size)
-    mcts = MCTS(model, simulations)
+    mcts = MCTS(model)
     best_loss = float('inf')
 
     # Create the 'models' folder if it doesn't exist
@@ -83,13 +84,22 @@ def train_model(board_size=7, epochs=10, simulations=100, num_games_per_epoch=10
         wins = 0
 
         for game_num in tqdm(range(num_games_per_epoch), desc=f'Epoch {epoch + 1}/{epochs}', unit='game'):
-            game = HexPosition(board_size)
+            game = engine.HexPosition(board_size)
             state_history, policy_history, value_history = [], [], []
 
             while game.winner == 0:
                 state_history.append(copy.deepcopy(game.board))
-                action = mcts.get_action(game)
-                game.moove(action)
+                if game.player == 1:
+                    chosen = mcts.get_action(game.board, game.get_action_space())
+                if game.player == -1:
+                    from random import choice
+                    chosen = choice(game.get_action_space())
+                game.moove(chosen)
+                # game.print()
+                if game.winner == 1:
+                    game._evaluate_white(verbose=True)
+                if game.winner == -1:
+                    game._evaluate_black(verbose=True)
 
             result = game.winner
             wins += 1 if result == 1 else 0
@@ -125,4 +135,4 @@ def train_model(board_size=7, epochs=10, simulations=100, num_games_per_epoch=10
 
 if __name__ == "__main__":
     select_device()
-    train_model(board_size=7, epochs=10, simulations=2, num_games_per_epoch=2)
+    train_model()
