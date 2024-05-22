@@ -51,8 +51,8 @@ def human_vs_agent(board_size=config.BOARD_SIZE, simulations=100, model_folder=N
     print(f"{'White' if game.winner == 1 else 'Black'} wins!")
 
 
-model_dir = 'fhtw_hex/submission_konrad_lord_spreitzhofer/models'
-"""model_folders = [f for f in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, f))]
+"""model_dir = 'fhtw_hex/submission_konrad_lord_spreitzhofer/models'
+model_folders = [f for f in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, f))]
 if not model_folders:
     print("No models found. Please train a model first.")
 else:
@@ -64,7 +64,6 @@ else:
 
     human_vs_agent(simulations=1, model_folder=selected_model_folder)"""
 
-selected_model_folder = os.path.join(model_dir, "final")
 
 # initializing a game object
 game = engine.HexPosition()

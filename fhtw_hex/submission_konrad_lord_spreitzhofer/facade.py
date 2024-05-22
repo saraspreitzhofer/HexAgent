@@ -102,5 +102,5 @@ def create_model(board_size):
 # Please make sure that the agent does actually work with the provided Hex module.
 
 def agent(board, action_set):
-    model = models.load_model("fhtw_hex/submission_konrad_lord_spreitzhofer/models/final/best_hex_model.keras")
+    model = models.load_model(config.MODEL)
     return MCTS(model).get_action(board, action_set)
