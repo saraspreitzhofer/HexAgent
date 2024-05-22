@@ -58,6 +58,11 @@ def save_results(losses, win_rates, model_folder):
     plt.close()
 
 
+def display_board(game):
+    """Displays the current state of the board."""
+    game.print(invert_colors=True)  # This will print the board in the terminal
+
+
 def train_model(board_size=7, epochs=10, simulations=100, num_games_per_epoch=10):
     print("Creating model...")
     model = create_model(board_size)
@@ -94,6 +99,9 @@ def train_model(board_size=7, epochs=10, simulations=100, num_games_per_epoch=10
             result = game.winner
             wins += 1 if result == 1 else 0
 
+            # Display the board state after the game ends
+            display_board(game)
+
             for state in state_history:
                 states.append(state)
                 policies.append(np.random.dirichlet(np.ones(board_size * board_size)))
@@ -125,4 +133,4 @@ def train_model(board_size=7, epochs=10, simulations=100, num_games_per_epoch=10
 
 if __name__ == "__main__":
     select_device()
-    train_model(board_size=7, epochs=10, simulations=2, num_games_per_epoch=2)
+    train_model(board_size=7, epochs=10, simulations=5, num_games_per_epoch=2)
