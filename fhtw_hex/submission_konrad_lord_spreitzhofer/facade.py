@@ -1,8 +1,11 @@
 from copy import deepcopy
-import numpy as np  
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
 from fhtw_hex import hex_engine as engine
 from fhtw_hex.submission_konrad_lord_spreitzhofer import config
-import torch
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
@@ -55,13 +58,34 @@ class Node:
         epsilon = 1e-6  # Small value to prevent division by zero
         return self.value_sum / (self.visit_count + epsilon) + self.prior
 
+class HexNet(nn.Module):
+    def __init__(self, board_size):
+        super(HexNet, self).__init__()
+        self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.flatten = nn.Flatten()
+        self.policy_head = nn.Linear(64 * board_size * board_size, board_size * board_size)
+        self.value_head = nn.Linear(64 * board_size * board_size, 1)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = self.flatten(x)
+        policy = F.softmax(self.policy_head(x), dim=1)
+        value = torch.tanh(self.value_head(x))
+        return policy, value
+
+def create_model(board_size):
+    model = HexNet(board_size).to(device)
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    return model, optimizer
 
 class MCTS:
     def __init__(self, model, simulations=100, device=device):
         self.model = model
         self.simulations = simulations
         self.device = device
-        self.model.to(self.device)
+        self.model.to(self.device)  # Ensure the model is on the GPU
 
     def get_action(self, state, action_set):
         root = Node(state, action_set)
@@ -89,42 +113,9 @@ class MCTS:
             policy, value = self.model(board)
         return policy.cpu().numpy()[0], value.cpu().numpy()[0][0]
 
-
-
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
-
-class HexNet(nn.Module):
-    def __init__(self, board_size):
-        super(HexNet, self).__init__()
-        self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
-        self.flatten = nn.Flatten()
-        self.policy_head = nn.Linear(64 * board_size * board_size, board_size * board_size)
-        self.value_head = nn.Linear(64 * board_size * board_size, 1)
-
-    def forward(self, x):
-        x = F.relu(self.conv1(x))
-        x = F.relu(self.conv2(x))
-        x = self.flatten(x)
-        policy = F.softmax(self.policy_head(x), dim=1)
-        value = torch.tanh(self.value_head(x))
-        return policy, value
-
-def create_model(board_size):
-    model = HexNet(board_size).to(device)  # Move model to GPU
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-    return model, optimizer
-
-
-
-# Here should be the necessary Python wrapper for your model, in the form of a callable agent, such as above.
-# Please make sure that the agent does actually work with the provided Hex module.
-
 def agent(board, action_set):
     board_size = config.BOARD_SIZE
     model, optimizer = create_model(board_size)
-    model.load_state_dict(torch.load(config.MODEL, map_location=device))  # Load the model weights
+    model.load_state_dict(torch.load(config.MODEL, map_location=device))
+    model.to(device)  # Move the model to GPU
     return MCTS(model).get_action(board, action_set)
