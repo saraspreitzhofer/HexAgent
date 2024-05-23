@@ -2,6 +2,7 @@ from copy import deepcopy
 import numpy as np  
 from fhtw_hex import hex_engine as engine
 from fhtw_hex.submission_konrad_lord_spreitzhofer import config
+import torch
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
