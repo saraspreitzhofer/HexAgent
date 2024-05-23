@@ -59,7 +59,7 @@ def save_results(losses, win_rates, model_folder):
 
 def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_per_epoch=config.NUM_OF_GAMES_PER_EPOCH):
     print("Creating model...")
-    model = create_model(board_size)
+    model, _ = create_model(board_size)
     mcts = MCTS(model)
     best_loss = float('inf')
 
