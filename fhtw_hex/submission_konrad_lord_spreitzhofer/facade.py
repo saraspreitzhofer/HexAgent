@@ -77,8 +77,7 @@ class HexNet(nn.Module):
 
 def create_model(board_size):
     model = HexNet(board_size).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-    return model, optimizer
+    return model
 
 class MCTS:
     def __init__(self, model, simulations=100, device=device):
@@ -115,7 +114,7 @@ class MCTS:
 
 def agent(board, action_set):
     board_size = config.BOARD_SIZE
-    model, optimizer = create_model(board_size)
+    model = create_model(board_size)
     model.load_state_dict(torch.load(config.MODEL, map_location=device))
     model.to(device)  # Move the model to GPU
     return MCTS(model).get_action(board, action_set)

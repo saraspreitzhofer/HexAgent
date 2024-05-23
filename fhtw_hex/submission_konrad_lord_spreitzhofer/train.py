@@ -6,32 +6,13 @@ from fhtw_hex import hex_engine as engine
 from facade import MCTS, create_model
 from tqdm import tqdm
 from datetime import datetime
+import torch
+import torch.nn as nn
+import torch.optim as optim
 import config
 
 # Suppress TensorFlow logs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-# tf.get_logger().setLevel('ERROR')
-
-
-def select_device():
-    """print("Select device for training:")
-    print("1. GPU (if available)")
-    print("2. CPU")
-    choice = input("Enter 1 or 2: ")
-
-    if choice == '1':
-        if not tf.config.list_physical_devices('GPU'):
-            print("No GPU found, using CPU instead.")
-        else:
-            print("Using GPU for training.")
-    else:
-        print("Using CPU for training.")
-        tf.config.set_visible_devices([], 'GPU')"""
-    # if not tf.config.list_physical_devices('GPU'):
-    #     print("No GPU found, using CPU instead.")
-    # else:
-    #     print("Using GPU for training.")
-    #     tf.config.set_visible_devices([], 'GPU')
 
 
 def save_results(losses, win_rates, model_folder):
@@ -59,7 +40,7 @@ def save_results(losses, win_rates, model_folder):
 
 def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_per_epoch=config.NUM_OF_GAMES_PER_EPOCH):
     print("Creating model...")
-    model, _ = create_model(board_size)
+    model = create_model(board_size)
     mcts = MCTS(model)
     best_loss = float('inf')
 
@@ -76,6 +57,12 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
     losses = []
     win_rates = []
 
+    criterion_policy = nn.CrossEntropyLoss()
+    criterion_value = nn.MSELoss()
+    optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-2)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
+
     for epoch in range(epochs):
         print(f"Starting Epoch {epoch + 1}/{epochs}")
         states, policies, values = [], [], []
@@ -89,14 +76,13 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
                 state_history.append(copy.deepcopy(game.board))
                 if game.player == 1:
                     chosen = mcts.get_action(game.board, game.get_action_space())
-                if game.player == -1:
+                else:
                     from random import choice
                     chosen = choice(game.get_action_space())
                 game.moove(chosen)
-                # game.print()
                 if game.winner == 1:
                     game._evaluate_white(verbose=True)
-                if game.winner == -1:
+                elif game.winner == -1:
                     game._evaluate_black(verbose=True)
 
             result = game.winner
@@ -107,30 +93,39 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
                 policies.append(np.random.dirichlet(np.ones(board_size * board_size)))
                 values.append(result)
 
-        states = np.array(states).reshape((-1, board_size, board_size, 1))
+        states = np.array(states).reshape((-1, 1, board_size, board_size))
         policies = np.array(policies)
-        values = np.array(values)
+        values = np.array(values).astype(np.float32)
 
-        print(f"Training model for Epoch {epoch + 1}/{epochs}")
-        history = model.fit(states, [policies, values], epochs=1, verbose=0)
+        states = torch.tensor(states, dtype=torch.float32).to(device)
+        policies = torch.tensor(policies, dtype=torch.float32).to(device)
+        values = torch.tensor(values, dtype=torch.float32).to(device)
 
-        loss = history.history['loss'][0]
-        losses.append(loss)
+        model.train()
+        optimizer.zero_grad()
+
+        policy_outputs, value_outputs = model(states)
+        policy_loss = criterion_policy(policy_outputs, policies)
+        value_loss = criterion_value(value_outputs.squeeze(), values)
+        loss = policy_loss + value_loss
+
+        loss.backward()
+        optimizer.step()
+
+        losses.append(loss.item())
 
         win_rate = wins / num_games_per_epoch
         win_rates.append(win_rate)
 
-        if loss < best_loss:
-            best_loss = loss
-            model.save(os.path.join(model_folder, 'best_hex_model.keras'))
+        if loss.item() < best_loss:
+            best_loss = loss.item()
+            torch.save(model.state_dict(), os.path.join(model_folder, 'best_hex_model.pth'))
             print("Saved best model with loss:", best_loss)
 
-        print(
-            f"Completed Epoch {epoch + 1}/{epochs} with loss: {loss}, win rate: {win_rate}")
+        print(f"Completed Epoch {epoch + 1}/{epochs} with loss: {loss.item()}, win rate: {win_rate}")
 
     save_results(losses, win_rates, model_folder)
 
 
 if __name__ == "__main__":
-    select_device()
     train_model()
