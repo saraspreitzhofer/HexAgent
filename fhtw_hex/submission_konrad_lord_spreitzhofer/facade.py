@@ -1,12 +1,10 @@
 from copy import deepcopy
-import numpy as np
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.layers import Input, Conv2D, Dense, Flatten
-from tensorflow.keras import models
+import numpy as np  
 from fhtw_hex import hex_engine as engine
 from fhtw_hex.submission_konrad_lord_spreitzhofer import config
 
-
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
 class Node:
     hex_position_class = engine.HexPosition
 
@@ -58,9 +56,11 @@ class Node:
 
 
 class MCTS:
-    def __init__(self, model, simulations=100):
+    def __init__(self, model, simulations=100, device=device):
         self.model = model
         self.simulations = simulations
+        self.device = device
+        self.model.to(self.device)
 
     def get_action(self, state, action_set):
         root = Node(state, action_set)
@@ -81,26 +81,49 @@ class MCTS:
         return -value
 
     def evaluate(self, node):
-        board = np.array(node.state).reshape((1, config.BOARD_SIZE, config.BOARD_SIZE, 1))
-        policy, value = self.model.predict(board, verbose=0)
-        return policy[0], value[0][0]
+        board = np.array(node.state).reshape((1, 1, config.BOARD_SIZE, config.BOARD_SIZE)).astype(np.float32)
+        board = torch.tensor(board, device=self.device)
+        self.model.eval()
+        with torch.no_grad():
+            policy, value = self.model(board)
+        return policy.cpu().numpy()[0], value.cpu().numpy()[0][0]
 
+
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+
+class HexNet(nn.Module):
+    def __init__(self, board_size):
+        super(HexNet, self).__init__()
+        self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.flatten = nn.Flatten()
+        self.policy_head = nn.Linear(64 * board_size * board_size, board_size * board_size)
+        self.value_head = nn.Linear(64 * board_size * board_size, 1)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = self.flatten(x)
+        policy = F.softmax(self.policy_head(x), dim=1)
+        value = torch.tanh(self.value_head(x))
+        return policy, value
 
 def create_model(board_size):
-    inputs = Input(shape=(board_size, board_size, 1))
-    x = Conv2D(32, (3, 3), padding='same', activation='relu')(inputs)
-    x = Conv2D(64, (3, 3), padding='same', activation='relu')(x)
-    x = Flatten()(x)
-    policy = Dense(board_size * board_size, activation='softmax', name='policy_output')(x)
-    value = Dense(1, activation='tanh', name='value_output')(x)
-    model = models.Model(inputs=inputs, outputs=[policy, value])
-    model.compile(loss=['categorical_crossentropy', 'mean_squared_error'], optimizer=Adam(learning_rate=0.001))
-    return model
+    model = HexNet(board_size).to(device)  # Move model to GPU
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    return model, optimizer
+
 
 
 # Here should be the necessary Python wrapper for your model, in the form of a callable agent, such as above.
 # Please make sure that the agent does actually work with the provided Hex module.
 
 def agent(board, action_set):
-    model = models.load_model(config.MODEL)
+    board_size = config.BOARD_SIZE
+    model, optimizer = create_model(board_size)
+    model.load_state_dict(torch.load(config.MODEL, map_location=device))  # Load the model weights
     return MCTS(model).get_action(board, action_set)

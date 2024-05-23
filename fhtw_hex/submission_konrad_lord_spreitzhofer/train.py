@@ -2,7 +2,6 @@ import numpy as np
 import os
 import copy
 import matplotlib.pyplot as plt
-import tensorflow as tf
 from fhtw_hex import hex_engine as engine
 from facade import MCTS, create_model
 from tqdm import tqdm
@@ -11,7 +10,7 @@ import config
 
 # Suppress TensorFlow logs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-tf.get_logger().setLevel('ERROR')
+# tf.get_logger().setLevel('ERROR')
 
 
 def select_device():
@@ -28,12 +27,11 @@ def select_device():
     else:
         print("Using CPU for training.")
         tf.config.set_visible_devices([], 'GPU')"""
-
-    if not tf.config.list_physical_devices('GPU'):
-        print("No GPU found, using CPU instead.")
-    else:
-        print("Using CPU for training.")
-        tf.config.set_visible_devices([], 'GPU')
+    # if not tf.config.list_physical_devices('GPU'):
+    #     print("No GPU found, using CPU instead.")
+    # else:
+    #     print("Using GPU for training.")
+    #     tf.config.set_visible_devices([], 'GPU')
 
 
 def save_results(losses, win_rates, model_folder):
