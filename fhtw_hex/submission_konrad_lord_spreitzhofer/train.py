@@ -81,23 +81,28 @@ def play_game(mcts: MCTS, board_size: int, opponent='random', counter: Counter =
 
 def play_games(mcts, board_size, num_games, opponent='random', parallel=False):
     if parallel:
-        counter = Counter(num_games)
+        # doesn't work right now because of tqdm
+        # counter = Counter(num_games)
 
-        def update_progress():
-            with tqdm(total=num_games, unit="game") as pbar:
-                while True:
-                    with counter.lock:
-                        pbar.n = counter.value.value
-                    pbar.refresh()
-                    if counter.value.value >= num_games:
-                        break
+        # def update_progress():
+        #     with tqdm(total=num_games, unit="game") as pbar:
+        #         while True:
+        #             with counter.lock:
+        #                 pbar.n = counter.value.value
+        #             pbar.refresh()
+        #             if counter.value.value >= num_games:
+        #                 break
 
-        pool = Pool(cpu_count())
-        watcher = pool.apply_async(update_progress)
-        results = pool.starmap(play_game, [(mcts, board_size, opponent, counter) for _ in range(num_games)])
-        pool.close()
-        pool.join()
-        watcher.wait()
+        # pool = Pool(cpu_count())
+        # watcher = pool.apply_async(update_progress)
+        # results = pool.starmap(play_game, [(mcts, board_size, opponent, counter) for _ in range(num_games)])
+        # pool.close()
+        # pool.join()
+        # watcher.wait()
+
+        with Pool(cpu_count()) as pool:
+            results = pool.starmap(play_game, [(mcts, board_size, opponent) for _ in tqdm(range(num_games), unit='game')])
+
         return results
     else:
         results = []
