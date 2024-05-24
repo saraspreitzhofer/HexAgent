@@ -131,7 +131,7 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
                 if game.winner == 1:
                     wins += 1
 
-    win_rate = wins / num_games
+    win_rate = wins / (num_games * len(checkpoints))
     return win_rate
 
 
