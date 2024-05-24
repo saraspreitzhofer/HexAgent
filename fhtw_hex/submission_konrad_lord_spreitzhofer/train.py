@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import config
-from multiprocessing import Pool, cpu_count, set_start_method
+from multiprocessing import Pool, cpu_count, set_start_method, Manager
 
 # Suppress TensorFlow logs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -39,7 +39,21 @@ def save_results(losses, win_rates, win_rates_checkpoint, model_folder):
 
     plt.close()
 
-def play_game(mcts: MCTS, board_size: int, opponent='random'):
+class Counter:
+    def __init__(self, total):
+        self.value = 0
+        self.total = total
+        self.lock = Manager().Lock()
+
+    def increment(self):
+        with self.lock:
+            self.value += 1
+
+    def progress(self):
+        with self.lock:
+            return self.value / self.total
+
+def play_game(mcts: MCTS, board_size: int, opponent='random', counter: Counter = None):
     game = engine.HexPosition(board_size)
     state_history = []
 
@@ -56,17 +70,35 @@ def play_game(mcts: MCTS, board_size: int, opponent='random'):
         game.moove(chosen)
 
     result = game.winner
+    if counter:
+        counter.increment()
     return state_history, result
 
 def play_games(mcts, board_size, num_games, opponent='random', parallel=False):
     if parallel:
-        with Pool(cpu_count()) as pool:
-            results = pool.starmap(play_game, [(mcts, board_size, opponent) for _ in tqdm(range(num_games), unit='game')])
+        manager = Manager()
+        counter = Counter(num_games)
+
+        def update_progress():
+            with tqdm(total=num_games, unit="game") as pbar:
+                while True:
+                    pbar.n = counter.value
+                    pbar.refresh()
+                    if counter.value >= num_games:
+                        break
+
+        pool = Pool(cpu_count())
+        watcher = pool.apply_async(update_progress)
+        results = pool.starmap(play_game, [(mcts, board_size, opponent, counter) for _ in range(num_games)])
+        pool.close()
+        pool.join()
+        watcher.wait()
         return results
-    results = []
-    for _ in tqdm(range(num_games), unit='game'):
-        results.append(play_game(mcts, board_size, opponent))
-    return results
+    else:
+        results = []
+        for _ in tqdm(range(num_games), unit='game'):
+            results.append(play_game(mcts, board_size, opponent))
+        return results
 
 def save_checkpoint(model, optimizer, epoch, model_folder, filename='checkpoint.pth.tar'):
     state = {
