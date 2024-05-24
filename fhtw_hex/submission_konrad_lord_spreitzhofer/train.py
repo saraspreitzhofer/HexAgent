@@ -204,7 +204,7 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
 
         if epoch == 1 or epoch % config.CHECKPOINT_INTERVAL == 0:  # Save checkpoints and validate
             checkpoint_epoch = 0 if epoch == 1 else epoch
-            save_checkpoint(model, optimizer, checkpoint_epoch, model_folder, filename=f'checkpoint_epoch_{epoch}.pth.tar')
+            save_checkpoint(model, optimizer, checkpoint_epoch, model_folder, filename=f'checkpoint_epoch_{checkpoint_epoch}.pth.tar')
             # only validate if we have enough checkpoints to compare against
             if checkpoint_epoch >= (config.CHECKPOINT_INTERVAL * config.NUM_OF_OPPONENTS_PER_CHECKPOINT):
                 # Validate against the last few checkpoints
