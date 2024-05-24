@@ -58,12 +58,9 @@ class Counter:
         with self.lock:
             self.value.value += 1
 
-    def progress(self):
-        with self.lock:
-            return self.value.value / self.total
-
 def play_game(mcts: MCTS, board_size: int, opponent='random', counter: Counter = None):
     game = engine.HexPosition(board_size)
+    mcts = MCTS(mcts.model)
     state_history = []
 
     while game.winner == 0:
