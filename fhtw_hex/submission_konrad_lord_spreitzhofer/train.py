@@ -59,9 +59,14 @@ def play_game(mcts: MCTS, board_size: int, opponent='random'):
     result = game.winner
     return state_history, result
 
-def parallel_play_games(mcts, board_size, num_games, opponent='random'):
-    with Pool(cpu_count()) as pool:
-        results = pool.starmap(play_game, [(mcts, board_size, opponent) for _ in range(num_games)])
+def play_games(mcts, board_size, num_games, opponent='random', parallel=False):
+    if parallel:
+        with Pool(cpu_count()) as pool:
+            results = pool.starmap(play_game, [(mcts, board_size, opponent) for _ in range(num_games)])
+        return results
+    results = []
+    for _ in tqdm(range(num_games)):
+        results.append(play_game(mcts, board_size, opponent))
     return results
 
 def save_checkpoint(model, optimizer, epoch, model_folder, filename='checkpoint.pth.tar'):
@@ -161,7 +166,7 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
     for epoch in range(epochs):
         print(f"Starting Epoch {epoch + 1}/{epochs}")
         opponent = 'random' if epoch < epochs // 2 else 'self'
-        results = parallel_play_games(mcts, board_size, num_games_per_epoch, opponent=opponent)
+        results = play_games(mcts, board_size, num_games_per_epoch, opponent=opponent)
          
         states, policies, values = [], [], []
         wins = 0
