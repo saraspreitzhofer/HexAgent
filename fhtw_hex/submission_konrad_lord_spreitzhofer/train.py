@@ -10,10 +10,10 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import config
+from multiprocessing import Pool, cpu_count
 
 # Suppress TensorFlow logs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
 
 def save_results(losses, win_rates, model_folder):
     epochs = range(1, len(losses) + 1)
@@ -37,6 +37,26 @@ def save_results(losses, win_rates, model_folder):
 
     plt.close()
 
+def play_game(mcts, board_size):
+    game = engine.HexPosition(board_size)
+    state_history = []
+
+    while game.winner == 0:
+        state_history.append(copy.deepcopy(game.board))
+        if game.player == 1:
+            chosen = mcts.get_action(game.board, game.get_action_space())
+        else:
+            from random import choice
+            chosen = choice(game.get_action_space())
+        game.moove(chosen)
+
+    result = game.winner
+    return state_history, result
+
+def parallel_play_games(mcts, board_size, num_games):
+    with Pool(cpu_count()) as pool:
+        results = pool.starmap(play_game, [(mcts, board_size) for _ in range(num_games)])
+    return results
 
 def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_per_epoch=config.NUM_OF_GAMES_PER_EPOCH):
     print("Creating model...")
@@ -65,29 +85,13 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
 
     for epoch in range(epochs):
         print(f"Starting Epoch {epoch + 1}/{epochs}")
+        results = parallel_play_games(mcts, board_size, num_games_per_epoch)
+        
         states, policies, values = [], [], []
         wins = 0
 
-        for game_num in tqdm(range(num_games_per_epoch), desc=f'Epoch {epoch + 1}/{epochs}', unit='game'):
-            game = engine.HexPosition(board_size)
-            state_history, policy_history, value_history = [], [], []
-
-            while game.winner == 0:
-                state_history.append(copy.deepcopy(game.board))
-                if game.player == 1:
-                    chosen = mcts.get_action(game.board, game.get_action_space())
-                else:
-                    from random import choice
-                    chosen = choice(game.get_action_space())
-                game.moove(chosen)
-                if game.winner == 1:
-                    game._evaluate_white(verbose=True)
-                elif game.winner == -1:
-                    game._evaluate_black(verbose=True)
-
-            result = game.winner
+        for state_history, result in results:
             wins += 1 if result == 1 else 0
-
             for state in state_history:
                 states.append(state)
                 policies.append(np.random.dirichlet(np.ones(board_size * board_size)))
@@ -114,7 +118,7 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
 
         losses.append(loss.item())
 
-        win_rate = wins / num_games_per_epoch
+        win_rate = validate_model(model, board_size, num_games=10)
         win_rates.append(win_rate)
 
         if loss.item() < best_loss:
