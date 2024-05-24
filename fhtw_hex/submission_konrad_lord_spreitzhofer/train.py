@@ -216,7 +216,7 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
             best_loss = loss.item()
             best_model_state = model.state_dict()
 
-        print(f"Completed Epoch {epoch + 1}/{epochs} with loss: {loss.item()}")
+        print(f"Completed Epoch {epoch}/{epochs} with loss: {loss.item()}")
         if win_rate:
             print(f"Win rate: {win_rate}")
 
