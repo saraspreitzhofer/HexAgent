@@ -181,8 +181,6 @@ def setup_device():
 
 def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_per_epoch=config.NUM_OF_GAMES_PER_EPOCH):
     device = setup_device()
-    print("Saving config to file...")
-    save_config_to_file(config, filename='config.py')
     print("Creating model...")
     model = create_model(board_size)
     mcts = MCTS(model)
@@ -198,6 +196,9 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
     current_time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
     model_folder = os.path.join(models_folder, current_time)
     os.makedirs(model_folder)
+
+    print("Saving config to file...")
+    save_config_to_file(config, filename=os.path.join(model_folder,'config.py'))
 
     losses = []
     win_rates = []
