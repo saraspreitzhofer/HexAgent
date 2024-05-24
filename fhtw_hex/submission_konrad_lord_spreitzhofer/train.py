@@ -11,14 +11,22 @@ import torch.nn as nn
 import torch.optim as optim
 import config
 from multiprocessing import Pool, cpu_count, set_start_method, Manager
+import inspect
 
 # Suppress TensorFlow logs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+def save_config_to_file(config_module, filename="config.py"):
+    with open(filename, 'w') as file:
+        for name, value in inspect.getmembers(config_module):
+            if not name.startswith("__") and not inspect.ismodule(value) and not inspect.isfunction(value):
+                file.write(f"{name} = {value}\n")
 
 def save_results(losses, win_rates, win_rates_checkpoint, model_folder):
     epochs = range(1, len(losses) + 1)
 
     print(f"checkpoint winrate: [{', '.join(str(element) for element in win_rates_checkpoint)}]")
+    config.save_config_to_json(config.config, filename=os.path.join(model_folder, 'config.json'))
 
     plt.figure(figsize=(12, 6))
 
@@ -173,6 +181,8 @@ def setup_device():
 
 def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_per_epoch=config.NUM_OF_GAMES_PER_EPOCH):
     device = setup_device()
+    print("Saving config to file...")
+    save_config_to_file(config, filename='config.py')
     print("Creating model...")
     model = create_model(board_size)
     mcts = MCTS(model)
