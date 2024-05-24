@@ -15,8 +15,11 @@ from multiprocessing import Pool, cpu_count, set_start_method
 # Suppress TensorFlow logs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-def save_results(losses, win_rates, model_folder):
+def save_results(losses, win_rates, win_rates_checkpoint, model_folder):
     epochs = range(1, len(losses) + 1)
+
+    # TODO plt checkpoint winrate
+    print("checkpoint winrate: " + win_rates_checkpoint)
 
     plt.figure(figsize=(12, 6))
 
@@ -37,7 +40,7 @@ def save_results(losses, win_rates, model_folder):
 
     plt.close()
 
-def play_game(mcts, board_size):
+def play_game(mcts: MCTS, board_size: int, opponent='random'):
     game = engine.HexPosition(board_size)
     state_history = []
 
@@ -46,17 +49,38 @@ def play_game(mcts, board_size):
         if game.player == 1:
             chosen = mcts.get_action(game.board, game.get_action_space())
         else:
-            from random import choice
-            chosen = choice(game.get_action_space())
+            if opponent == 'random':
+                from random import choice
+                chosen = choice(game.get_action_space())
+            elif opponent == 'self':
+                chosen = mcts.get_action(game.board, game.get_action_space())
         game.moove(chosen)
 
     result = game.winner
     return state_history, result
 
-def parallel_play_games(mcts, board_size, num_games):
+def parallel_play_games(mcts, board_size, num_games, opponent='random'):
     with Pool(cpu_count()) as pool:
-        results = pool.starmap(play_game, [(mcts, board_size) for _ in range(num_games)])
+        results = pool.starmap(play_game, [(mcts, board_size, opponent) for _ in range(num_games)])
     return results
+
+def save_checkpoint(model, optimizer, epoch, model_folder, filename='checkpoint.pth.tar'):
+    state = {
+        'epoch': epoch,
+        'state_dict': model.state_dict(),
+        'optimizer': optimizer.state_dict(),
+    }
+    filepath = os.path.join(model_folder, filename)
+    torch.save(state, filepath)
+
+def load_checkpoint(filepath, board_size):
+    model = create_model(board_size)
+    optimizer = optim.Adam(model.parameters())
+    checkpoint = torch.load(filepath)
+    model.load_state_dict(checkpoint['state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer'])
+    return model, optimizer
+
 
 def validate_model(model, board_size, num_games=10):
     model.eval()
@@ -79,11 +103,40 @@ def validate_model(model, board_size, num_games=10):
     win_rate = wins / num_games
     return win_rate
 
+def validate_against_checkpoints(model, board_size, num_games=10, model_folder='models', checkpoints=[]):
+    model.eval()
+    current_mcts = MCTS(model)
+    wins = 0
+
+    with torch.no_grad():
+        for checkpoint in checkpoints:
+            # Load the checkpoint model
+            checkpoint_model, _ = load_checkpoint(checkpoint, board_size)
+            checkpoint_mcts = MCTS(checkpoint_model)
+
+            # Play games between current model and checkpoint model
+            for _ in range(num_games // len(checkpoints)):
+                game = engine.HexPosition(board_size)
+                while game.winner == 0:
+                    if game.player == 1:
+                        chosen = current_mcts.get_action(game.board, game.get_action_space())
+                    else:
+                        chosen = checkpoint_mcts.get_action(game.board, game.get_action_space())
+                    game.moove(chosen)
+
+                if game.winner == 1:
+                    wins += 1
+
+    win_rate = wins / num_games
+    return win_rate
+
+
 def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_per_epoch=config.NUM_OF_GAMES_PER_EPOCH):
     print("Creating model...")
     model = create_model(board_size)
     mcts = MCTS(model)
     best_loss = float('inf')
+    best_model_state = None
 
     # Create the 'models' folder if it doesn't exist
     models_folder = 'models'
@@ -97,6 +150,7 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
 
     losses = []
     win_rates = []
+    win_rates_checkpoint = []
 
     criterion_policy = nn.CrossEntropyLoss()
     criterion_value = nn.MSELoss()
@@ -106,8 +160,9 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
 
     for epoch in range(epochs):
         print(f"Starting Epoch {epoch + 1}/{epochs}")
-        results = parallel_play_games(mcts, board_size, num_games_per_epoch)
-        
+        opponent = 'random' if epoch < epochs // 2 else 'self'
+        results = parallel_play_games(mcts, board_size, num_games_per_epoch, opponent=opponent)
+         
         states, policies, values = [], [], []
         wins = 0
 
@@ -142,14 +197,24 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
         win_rate = validate_model(model, board_size, num_games=10)
         win_rates.append(win_rate)
 
+        if epoch % 20 == 0:  # Save checkpoints every 10 epochs
+            save_checkpoint(model, optimizer, epoch, model_folder, filename=f'checkpoint_epoch_{epoch}.pth.tar')
+            checkpoints = [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range(0, epoch+1, 20)]
+            win_rate = validate_against_checkpoints(model, board_size, num_games=10, model_folder=model_folder, checkpoints=checkpoints)
+            win_rates_checkpoint.append(win_rate)
+
         if loss.item() < best_loss:
             best_loss = loss.item()
-            torch.save(model.state_dict(), os.path.join(model_folder, 'best_hex_model.pth'))
+            best_model_state = model.state_dict()
+            # torch.save(model.state_dict(), os.path.join(model_folder, 'best_hex_model.pth'))
             print("Saved best model with loss:", best_loss)
 
         print(f"Completed Epoch {epoch + 1}/{epochs} with loss: {loss.item()}, win rate: {win_rate}")
+        
 
-    save_results(losses, win_rates, model_folder)
+
+    torch.save(best_model_state, os.path.join(model_folder, 'best_hex_model.pth'))
+    save_results(losses, win_rates, win_rates_checkpoint, model_folder)
 
 if __name__ == "__main__":
     set_start_method('spawn')
