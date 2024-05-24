@@ -60,7 +60,6 @@ class Counter:
 
 def play_game(mcts: MCTS, board_size: int, opponent='random', counter: Counter = None):
     game = engine.HexPosition(board_size)
-    mcts = MCTS(mcts.model)
     state_history = []
 
     while game.winner == 0:
@@ -212,7 +211,7 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
         if epoch == epochs / 2:
             print("Switching to self-play")
         opponent = 'random' if epoch < epochs // 2 else 'self'
-        results = play_games(mcts, board_size, num_games_per_epoch, opponent=opponent, parallel=True)
+        results = play_games(mcts, board_size, num_games_per_epoch, opponent=opponent, parallel=config.PARALLEL_GAMES)
          
         states, policies, values = [], [], []
         wins = 0
