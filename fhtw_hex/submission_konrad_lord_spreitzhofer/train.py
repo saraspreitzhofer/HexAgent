@@ -171,7 +171,7 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
         if epoch == epochs / 2:
             print("Switching to self-play")
         opponent = 'random' if epoch < epochs // 2 else 'self'
-        results = play_games(mcts, board_size, num_games_per_epoch, opponent=opponent)
+        results = play_games(mcts, board_size, num_games_per_epoch, opponent=opponent, parallel=True)
          
         states, policies, values = [], [], []
         wins = 0
