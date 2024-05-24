@@ -61,7 +61,7 @@ def play_game(mcts: MCTS, board_size: int, opponent='random'):
 def play_games(mcts, board_size, num_games, opponent='random', parallel=False):
     if parallel:
         with Pool(cpu_count()) as pool:
-            results = pool.starmap(play_game, [(mcts, board_size, opponent) for _ in range(num_games)])
+            results = pool.starmap(play_game, [(mcts, board_size, opponent) for _ in tqdm(range(num_games), unit='game')])
         return results
     results = []
     for _ in tqdm(range(num_games), unit='game'):
@@ -134,8 +134,13 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
     win_rate = wins / (num_games * len(checkpoints))
     return win_rate
 
+def setup_device():
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
+    return device
 
 def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_per_epoch=config.NUM_OF_GAMES_PER_EPOCH):
+    device = setup_device()
     print("Creating model...")
     model = create_model(board_size)
     mcts = MCTS(model)
@@ -159,7 +164,6 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
     criterion_policy = nn.CrossEntropyLoss()
     criterion_value = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=config.LEARNING_RATE, weight_decay=config.WEIGHT_DECAY)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
 
     for epoch in range(1, epochs+1):
