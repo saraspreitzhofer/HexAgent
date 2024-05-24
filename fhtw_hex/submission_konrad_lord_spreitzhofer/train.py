@@ -18,7 +18,6 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 def save_results(losses, win_rates, win_rates_checkpoint, model_folder):
     epochs = range(1, len(losses) + 1)
 
-    # TODO plt checkpoint winrate
     print("checkpoint winrate: " + win_rates_checkpoint)
 
     plt.figure(figsize=(12, 6))
@@ -31,11 +30,11 @@ def save_results(losses, win_rates, win_rates_checkpoint, model_folder):
     plt.title('Loss over Epochs')
 
     plt.subplot(1, 2, 2)
-    plt.plot(epochs, win_rates, label='Win Rate')
-    plt.xlabel('Epoch')
+    plt.plot(epochs // config.CHECKPOINT_INTERVAL, win_rates_checkpoint, label='Win Rate')
+    plt.xlabel('Checkpoint')
     plt.ylabel('Win Rate')
     plt.legend()
-    plt.title('Win Rate over Epochs')
+    plt.title('Win Rate over Checkpoints')
     plt.savefig(os.path.join(model_folder, 'loss_and_win_rate.png'))
 
     plt.close()
@@ -65,7 +64,7 @@ def play_games(mcts, board_size, num_games, opponent='random', parallel=False):
             results = pool.starmap(play_game, [(mcts, board_size, opponent) for _ in range(num_games)])
         return results
     results = []
-    for _ in tqdm(range(num_games)):
+    for _ in tqdm(range(num_games), unit='game'):
         results.append(play_game(mcts, board_size, opponent))
     return results
 
@@ -108,19 +107,19 @@ def validate_model(model, board_size, num_games=10):
     win_rate = wins / num_games
     return win_rate
 
-def validate_against_checkpoints(model, board_size, num_games=10, model_folder='models', checkpoints=[]):
+def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder='models', checkpoints=[]):
     model.eval()
     current_mcts = MCTS(model)
     wins = 0
 
     with torch.no_grad():
-        for checkpoint in checkpoints:
+        for checkpoint in tqdm(checkpoints, desc='Checkpoints', unit='checkpoint'):
             # Load the checkpoint model
             checkpoint_model, _ = load_checkpoint(checkpoint, board_size)
             checkpoint_mcts = MCTS(checkpoint_model)
 
             # Play games between current model and checkpoint model
-            for _ in range(num_games // len(checkpoints)):
+            for _ in range(num_games):
                 game = engine.HexPosition(board_size)
                 while game.winner == 0:
                     if game.player == 1:
@@ -199,27 +198,26 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
 
         losses.append(loss.item())
 
-        win_rate = validate_model(model, board_size, num_games=10)
-        win_rates.append(win_rate)
+        win_rate = None
 
-        if epoch % 20 == 0:  # Save checkpoints every 10 epochs
+        if epoch % config.CHECKPOINT_INTERVAL == 0:  # Save checkpoints and validate
             save_checkpoint(model, optimizer, epoch, model_folder, filename=f'checkpoint_epoch_{epoch}.pth.tar')
-            checkpoints = [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range(0, epoch+1, 20)]
-            win_rate = validate_against_checkpoints(model, board_size, num_games=10, model_folder=model_folder, checkpoints=checkpoints)
+            checkpoints = [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range(0, epoch+1, config.CHECKPOINT_INTERVAL)]
+            checkpoints = checkpoints[-config.NUM_OF_OPPONENTS_PER_CHECKPOINT:] # Only validate against the last few checkpoints
+            win_rate = validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder=model_folder, checkpoints=checkpoints)
             win_rates_checkpoint.append(win_rate)
 
         if loss.item() < best_loss:
             best_loss = loss.item()
             best_model_state = model.state_dict()
-            # torch.save(model.state_dict(), os.path.join(model_folder, 'best_hex_model.pth'))
-            print("Saved best model with loss:", best_loss)
 
-        print(f"Completed Epoch {epoch + 1}/{epochs} with loss: {loss.item()}, win rate: {win_rate}")
-        
+        print(f"Completed Epoch {epoch + 1}/{epochs} with loss: {loss.item()}")
+        if win_rate:
+            print(f"Win rate: {win_rate}")
 
-
-    torch.save(best_model_state, os.path.join(model_folder, 'best_hex_model.pth'))
-    save_results(losses, win_rates, win_rates_checkpoint, model_folder)
+    final_model_path = os.path.join(model_folder, 'final')
+    torch.save(best_model_state, os.path.join(final_model_path, 'best_hex_model.pth'))
+    save_results(losses, win_rates, win_rates_checkpoint, final_model_path)
 
 if __name__ == "__main__":
     set_start_method('spawn')
