@@ -58,18 +58,41 @@ class Node:
         epsilon = 1e-6  # Small value to prevent division by zero
         return self.value_sum / (self.visit_count + epsilon) + self.prior
 
+class ResidualBlock(nn.Module):
+    def __init__(self, channels):
+        super(ResidualBlock, self).__init__()
+        self.conv1 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(channels)
+        self.conv2 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm2d(channels)
+
+    def forward(self, x):
+        residual = x
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+        out += residual
+        out = F.relu(out)
+        return out
+
 class HexNet(nn.Module):
     def __init__(self, board_size):
         super(HexNet, self).__init__()
-        self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.board_size = board_size
+        self.conv1 = nn.Conv2d(1, 64, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(64)
+        
+        self.residual_blocks = nn.ModuleList([ResidualBlock(64) for _ in range(5)])
+        
         self.flatten = nn.Flatten()
         self.policy_head = nn.Linear(64 * board_size * board_size, board_size * board_size)
         self.value_head = nn.Linear(64 * board_size * board_size, 1)
 
     def forward(self, x):
-        x = F.relu(self.conv1(x))
-        x = F.relu(self.conv2(x))
+        x = F.relu(self.bn1(self.conv1(x)))
+        
+        for block in self.residual_blocks:
+            x = block(x)
+        
         x = self.flatten(x)
         policy = F.softmax(self.policy_head(x), dim=1)
         value = torch.tanh(self.value_head(x))
