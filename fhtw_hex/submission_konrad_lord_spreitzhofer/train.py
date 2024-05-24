@@ -203,9 +203,9 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
         if epoch % config.CHECKPOINT_INTERVAL == 0:  # Save checkpoints and validate
             save_checkpoint(model, optimizer, epoch, model_folder, filename=f'checkpoint_epoch_{epoch}.pth.tar')
             # only validate if we have enough checkpoints to compare against
-            if (epoch+1) >= (config.CHECKPOINT_INTERVAL * config.NUM_OF_OPPONENTS_PER_CHECKPOINT):
+            if epoch >= (config.CHECKPOINT_INTERVAL * config.NUM_OF_OPPONENTS_PER_CHECKPOINT):
                 # Validate against the last few checkpoints
-                checkpoints = [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range((epoch+1) - (config.NUM_OF_OPPONENTS_PER_CHECKPOINT * config.CHECKPOINT_INTERVAL), epoch+1, config.CHECKPOINT_INTERVAL)]
+                checkpoints = [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range((epoch) - (config.NUM_OF_OPPONENTS_PER_CHECKPOINT * config.CHECKPOINT_INTERVAL), epoch+1, config.CHECKPOINT_INTERVAL)]
                 win_rate = validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder=model_folder, checkpoints=checkpoints)
                 win_rates_checkpoint.append(win_rate)
 
