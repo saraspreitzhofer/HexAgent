@@ -30,7 +30,7 @@ def save_results(losses, win_rates, win_rates_checkpoint, model_folder):
     plt.title('Loss over Epochs')
 
     plt.subplot(1, 2, 2)
-    plt.plot(range(1, len(losses)+1, config.CHECKPOINT_INTERVAL), win_rates_checkpoint, label='Win Rate')
+    plt.plot(range(1, len(win_rates_checkpoint)+1), win_rates_checkpoint, label='Win Rate')
     plt.xlabel('Checkpoint')
     plt.ylabel('Win Rate')
     plt.legend()
