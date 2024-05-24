@@ -217,9 +217,11 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
         if win_rate:
             print(f"Win rate: {win_rate}")
 
-    final_model_path = os.path.join(model_folder, 'final')
-    torch.save(best_model_state, os.path.join(final_model_path, 'best_hex_model.pth'))
-    save_results(losses, win_rates, win_rates_checkpoint, final_model_path)
+    best_model_path = os.path.join(model_folder, 'best_loss')
+    if not os.path.exists(best_model_path):
+        os.makedirs(best_model_path)
+    torch.save(best_model_state, os.path.join(best_model_path, 'best_hex_model.pth'))
+    save_results(losses, win_rates, win_rates_checkpoint, best_model_path)
 
 if __name__ == "__main__":
     set_start_method('spawn')
