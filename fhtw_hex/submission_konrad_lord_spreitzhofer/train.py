@@ -49,17 +49,18 @@ def save_results(losses, win_rates, win_rates_checkpoint, model_folder):
 
 class Counter:
     def __init__(self, total):
-        self.value = 0
+        self.manager = Manager()
+        self.value = self.manager.Value('i', 0)
         self.total = total
-        self.lock = Manager().Lock()
+        self.lock = self.manager.Lock()
 
     def increment(self):
         with self.lock:
-            self.value += 1
+            self.value.value += 1
 
     def progress(self):
         with self.lock:
-            return self.value / self.total
+            return self.value.value / self.total
 
 def play_game(mcts: MCTS, board_size: int, opponent='random', counter: Counter = None):
     game = engine.HexPosition(board_size)
@@ -84,15 +85,15 @@ def play_game(mcts: MCTS, board_size: int, opponent='random', counter: Counter =
 
 def play_games(mcts, board_size, num_games, opponent='random', parallel=False):
     if parallel:
-        manager = Manager()
         counter = Counter(num_games)
 
         def update_progress():
             with tqdm(total=num_games, unit="game") as pbar:
                 while True:
-                    pbar.n = counter.value
+                    with counter.lock:
+                        pbar.n = counter.value.value
                     pbar.refresh()
-                    if counter.value >= num_games:
+                    if counter.value.value >= num_games:
                         break
 
         pool = Pool(cpu_count())
