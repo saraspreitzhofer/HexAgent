@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import config
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool, cpu_count, set_start_method
 
 # Suppress TensorFlow logs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -57,6 +57,27 @@ def parallel_play_games(mcts, board_size, num_games):
     with Pool(cpu_count()) as pool:
         results = pool.starmap(play_game, [(mcts, board_size) for _ in range(num_games)])
     return results
+
+def validate_model(model, board_size, num_games=10):
+    model.eval()
+    mcts = MCTS(model)
+    wins = 0
+
+    with torch.no_grad():
+        for _ in range(num_games):
+            game = engine.HexPosition(board_size)
+            while game.winner == 0:
+                if game.player == 1:
+                    chosen = mcts.get_action(game.board, game.get_action_space())
+                else:
+                    chosen = mcts.get_action(game.board, game.get_action_space())
+                game.moove(chosen)
+
+            if game.winner == 1:
+                wins += 1
+
+    win_rate = wins / num_games
+    return win_rate
 
 def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_per_epoch=config.NUM_OF_GAMES_PER_EPOCH):
     print("Creating model...")
@@ -130,6 +151,6 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
 
     save_results(losses, win_rates, model_folder)
 
-
 if __name__ == "__main__":
+    set_start_method('spawn')
     train_model()
