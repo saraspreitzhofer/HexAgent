@@ -162,8 +162,10 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
 
-    for epoch in range(epochs):
-        print(f"Starting Epoch {epoch + 1}/{epochs}")
+    for epoch in range(1, epochs+1):
+        print(f"Starting Epoch {epoch}/{epochs}")
+        if epoch == epochs / 2:
+            print("Switching to self-play")
         opponent = 'random' if epoch < epochs // 2 else 'self'
         results = play_games(mcts, board_size, num_games_per_epoch, opponent=opponent)
          
@@ -200,12 +202,13 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
 
         win_rate = None
 
-        if epoch % config.CHECKPOINT_INTERVAL == 0:  # Save checkpoints and validate
-            save_checkpoint(model, optimizer, epoch, model_folder, filename=f'checkpoint_epoch_{epoch}.pth.tar')
+        if epoch == 1 or epoch % config.CHECKPOINT_INTERVAL == 0:  # Save checkpoints and validate
+            checkpoint_epoch = 0 if epoch == 1 else epoch
+            save_checkpoint(model, optimizer, checkpoint_epoch, model_folder, filename=f'checkpoint_epoch_{epoch}.pth.tar')
             # only validate if we have enough checkpoints to compare against
-            if epoch >= (config.CHECKPOINT_INTERVAL * config.NUM_OF_OPPONENTS_PER_CHECKPOINT):
+            if checkpoint_epoch >= (config.CHECKPOINT_INTERVAL * config.NUM_OF_OPPONENTS_PER_CHECKPOINT):
                 # Validate against the last few checkpoints
-                checkpoints = [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range((epoch) - (config.NUM_OF_OPPONENTS_PER_CHECKPOINT * config.CHECKPOINT_INTERVAL), epoch+1, config.CHECKPOINT_INTERVAL)]
+                checkpoints = [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range((epoch) - (config.NUM_OF_OPPONENTS_PER_CHECKPOINT * config.CHECKPOINT_INTERVAL), epoch-config.CHECKPOINT_INTERVAL+1, config.CHECKPOINT_INTERVAL)]
                 win_rate = validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder=model_folder, checkpoints=checkpoints)
                 win_rates_checkpoint.append(win_rate)
 
