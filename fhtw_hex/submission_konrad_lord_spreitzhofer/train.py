@@ -18,7 +18,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 def save_results(losses, win_rates, win_rates_checkpoint, model_folder):
     epochs = range(1, len(losses) + 1)
 
-    print("checkpoint winrate: " + win_rates_checkpoint)
+    print(f"checkpoint winrate: [{','.join(str(element) for element in win_rates_checkpoint)}]")
 
     plt.figure(figsize=(12, 6))
 
