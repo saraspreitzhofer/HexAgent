@@ -155,6 +155,7 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
                     args = [(board_size, current_mcts, checkpoint_mcts) for _ in range(num_games)]
                     results = list(tqdm(pool.imap(play_validation, args), total=num_games, unit='game'))
                     wins = sum(results)
+                    print(f"results: {results}")
             else:
                 for _ in range(num_games):
                     wins += play_validation(board_size, current_mcts, checkpoint_mcts)
