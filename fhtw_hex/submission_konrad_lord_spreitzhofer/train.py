@@ -16,48 +16,10 @@ from multiprocessing import Pool, cpu_count
 import itertools
 import torch.multiprocessing as mp
 
+from fhtw_hex.submission_konrad_lord_spreitzhofer.utils import load_checkpoint, save_checkpoint, save_config_to_file, save_results, setup_device
 
 # Suppress TensorFlow logs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
-def save_config_to_file(config_module, filename="config.py"):
-    with open(filename, 'w') as file:
-        for name, value in inspect.getmembers(config_module):
-            if not name.startswith("__") and not inspect.ismodule(value) and not inspect.isfunction(value):
-                file.write(f"{name} = {value}\n")
-
-def save_results(losses, win_rates, policy_losses, value_losses, model_folder):
-    epochs = range(1, len(losses) + 1)
-
-    plt.figure(figsize=(12, 6))
-
-    plt.subplot(1, 2, 1)
-    plt.plot(epochs, losses, label='Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.title('Loss over Epochs')
-
-    plt.subplot(1, 2, 2)
-    for i, win_rate in enumerate(win_rates):
-        start_epoch = i * config.CHECKPOINT_INTERVAL + 1
-        plt.plot(range(start_epoch, start_epoch + len(win_rate)), win_rate, label=f'Checkpoint {start_epoch}')
-    plt.xlabel('Epoch')
-    plt.ylabel('Win Rate')
-    plt.legend()
-    plt.title('Win Rate over Checkpoints')
-    plt.savefig(os.path.join(model_folder, 'loss_and_win_rate.png'))
-    plt.close()
-
-    plt.figure(figsize=(12, 6))
-    plt.plot(range(1, len(policy_losses) + 1), policy_losses, label='Policy Loss')
-    plt.plot(range(1, len(value_losses) + 1), value_losses, label='Value Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.title('Policy and Value Losses over Epochs')
-    plt.savefig(os.path.join(model_folder, 'policy_and_value_losses.png'))
-    plt.close()
 
 def play_game(mcts: MCTS, board_size: int, opponent='random'):
     game = engine.HexPosition(board_size)
@@ -106,24 +68,6 @@ def play_games(model, board_size, num_games, opponent='random'):
             results.append(play_game(mcts, board_size, opponent))
         return results
 
-def save_checkpoint(model, optimizer, epoch, model_folder, filename='checkpoint.pth.tar'):
-    state = {
-        'epoch': epoch,
-        'state_dict': model.state_dict(),
-        'optimizer': optimizer.state_dict(),
-    }
-    filepath = os.path.join(model_folder, filename)
-    torch.save(state, filepath)
-
-def load_checkpoint(filepath, board_size):
-    model = create_model(board_size)
-    optimizer = optim.Adam(model.parameters())
-    checkpoint = torch.load(filepath)
-    model.load_state_dict(checkpoint['state_dict'])
-    optimizer.load_state_dict(checkpoint['optimizer'])
-    return model, optimizer
-
-
 def play_validation(args):
     board_size, current_mcts, checkpoint_mcts = args
     game = engine.HexPosition(board_size)
@@ -163,15 +107,6 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
             win_rates.append(wins / num_games)
 
     return win_rates
-
-def setup_device():
-    if torch.cuda.is_available():
-        device = torch.device('cuda')
-        print(f"Using device: {device} ({torch.cuda.get_device_name(0)})")
-    else:
-        device = torch.device('cpu')
-        print("CUDA device not found. Using CPU.")
-    return device
 
 def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_per_epoch=config.NUM_OF_GAMES_PER_EPOCH):
     device = setup_device()
@@ -281,8 +216,6 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
         os.makedirs(best_model_path)
     torch.save(best_model_state, os.path.join(best_model_path, 'best_hex_model.pth'))
     save_results(losses, win_rates, policy_losses, value_losses, best_model_path)
-
-
 
 if __name__ == "__main__":
     print("CUDA available: ", torch.cuda.is_available())
