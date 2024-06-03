@@ -126,7 +126,8 @@ def load_checkpoint(filepath, board_size):
     return model, optimizer
 
 
-def play_validation(board_size, current_mcts, checkpoint_mcts):
+def play_validation(args):
+    board_size, current_mcts, checkpoint_mcts = args
     game = engine.HexPosition(board_size)
     while game.winner == 0:
         if game.player == 1:
