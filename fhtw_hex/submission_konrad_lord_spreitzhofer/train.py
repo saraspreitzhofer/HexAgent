@@ -125,26 +125,17 @@ def load_checkpoint(filepath, board_size):
     optimizer.load_state_dict(checkpoint['optimizer'])
     return model, optimizer
 
-def validate_model(model, board_size, num_games=10):
-    model.eval()
-    mcts = MCTS(model)
-    wins = 0
 
-    with torch.no_grad():
-        for _ in range(num_games):
-            game = engine.HexPosition(board_size)
-            while game.winner == 0:
-                if game.player == 1:
-                    chosen = mcts.get_action(game.board, game.get_action_space())
-                else:
-                    chosen = mcts.get_action(game.board, game.get_action_space())
-                game.moove(chosen)
+def play_validation(board_size, current_mcts, checkpoint_mcts):
+    game = engine.HexPosition(board_size)
+    while game.winner == 0:
+        if game.player == 1:
+            chosen = current_mcts.get_action(game.board, game.get_action_space())
+        else:
+            chosen = checkpoint_mcts.get_action(game.board, game.get_action_space())
+        game.moove(chosen)
 
-            if game.winner == 1:
-                wins += 1
-
-    win_rate = wins / num_games
-    return win_rate
+        return 1 if game.winner == 1 else 0
 
 def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder='models', checkpoints=[]):
     model.eval()
@@ -157,17 +148,18 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
             checkpoint_mcts = MCTS(checkpoint_model)
             wins = 0
 
-            for _ in range(num_games):
-                game = engine.HexPosition(board_size)
-                while game.winner == 0:
-                    if game.player == 1:
-                        chosen = current_mcts.get_action(game.board, game.get_action_space())
-                    else:
-                        chosen = checkpoint_mcts.get_action(game.board, game.get_action_space())
-                    game.moove(chosen)
-
-                    if game.winner == 1:
-                        wins += 1
+            if config.PARALLEL_GAMES:
+                total_cpus = os.cpu_count()  # Anzahl der verfügbaren CPUs
+                num_threads = min(total_cpus, config.NUM_PARALLEL_THREADS)
+                device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+                mp.set_start_method('spawn', force=True)
+                with Pool(num_threads) as pool:
+                    args = [(board_size, current_mcts, checkpoint_mcts) for _ in range(num_games)]
+                    results = list(tqdm(pool.imap(play_validation, args), total=num_games, unit='game'))
+                    wins = sum(results)
+            else:
+                for _ in range(num_games):
+                    wins += play_validation(board_size, current_mcts, checkpoint_mcts)
             win_rates.append(wins / num_games)
 
     return win_rates
