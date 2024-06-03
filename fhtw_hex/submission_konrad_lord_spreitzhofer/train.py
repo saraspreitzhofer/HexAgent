@@ -211,9 +211,9 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
             for param_group in optimizer.param_groups:
                 param_group['lr'] = config.LEARNING_RATE
 
-        if epoch == epochs / 2:
+        if epoch == config.RANDOM_EPOCHS:
             print("Switching to self-play")
-        opponent = 'random' if epoch < epochs // 2 else 'self'
+        opponent = 'random' if epoch < config.RANDOM_EPOCHS else 'self'
         results = play_games(model, board_size, num_games_per_epoch, opponent=opponent)
 
         states, policies, values = [], [], []

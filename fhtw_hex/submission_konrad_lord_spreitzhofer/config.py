@@ -16,7 +16,7 @@ GAMMA = 0.90
 BATCH_SIZE = 32
 WARMUP_EPOCHS = 5  # Number of warm-up epochs
 WARMUP_LEARNING_RATE = 1e-6  # Initial learning rate for warm-up
-
+RANDOM_EPOCHS = 15  # Number of random policy epochs
 
 #Evaluation
 
