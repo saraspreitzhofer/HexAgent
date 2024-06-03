@@ -14,6 +14,8 @@ import inspect
 from torch.optim.lr_scheduler import StepLR
 from multiprocessing import Pool, cpu_count
 import itertools
+import torch.multiprocessing as mp
+
 
 # Suppress TensorFlow logs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -83,6 +85,7 @@ def play_games(model, board_size, num_games, opponent='random'):
         num_threads = min(total_cpus, config.NUM_PARALLEL_THREADS)
         print(f"Using {num_threads} parallel threads out of {total_cpus} available")
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        mp.set_start_method('spawn', force=True)
         with Pool(num_threads) as pool:
             args = [(model_state_dict, board_size, opponent, device) for _ in range(num_games)]
             results = list(tqdm(pool.imap(play_game_worker, args), total=num_games, unit='game'))
@@ -288,4 +291,5 @@ if __name__ == "__main__":
         print("CUDA device name: ", torch.cuda.get_device_name(0))
     else:
         print("CUDA device not found. Please check your CUDA installation.")
+    mp.set_start_method('spawn')
     train_model()
