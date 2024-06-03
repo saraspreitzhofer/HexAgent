@@ -46,16 +46,21 @@ class Node:
                          action_space=self.action_space)
                 )
 
-    def select_child(self):
-        return max(self.children, key=lambda x: x.value())
+    def select_child(self, exploration_weight=1.0):
+        return max(self.children, key=lambda x: x.value(exploration_weight))
 
     def update(self, value):
         self.visit_count += 1
         self.value_sum += value
 
-    def value(self):
-        epsilon = 1e-6  # Small value to prevent division by zero
-        return self.value_sum / (self.visit_count + epsilon) + self.prior
+    def value(self, exploration_weight=1.0):
+        epsilon = 1e-6
+        if self.visit_count == 0:
+            return float('inf')
+        exploitation = self.value_sum / (self.visit_count + epsilon)
+        exploration = exploration_weight * self.prior * np.sqrt(
+            np.log(self.parent.visit_count + 1) / (self.visit_count + epsilon))
+        return exploitation + exploration
 
 class ResidualBlock(nn.Module):
     def __init__(self, channels):
@@ -93,7 +98,7 @@ class HexNet(nn.Module):
             x = block(x)
         
         x = self.flatten(x)
-        policy = F.softmax(self.policy_head(x), dim=1)
+        policy =  F.log_softmax(self.policy_head(x), dim=1)
         value = torch.tanh(self.value_head(x))
         return policy, value
 
@@ -101,8 +106,9 @@ def create_model(board_size):
     model = HexNet(board_size).to(device)
     return model
 
+# In facade.py
 class MCTS:
-    def __init__(self, model, simulations=100, device=device):
+    def __init__(self, model, simulations=config.MCTS_SIMULATIONS, device=device):
         self.model = model
         self.simulations = simulations
         self.device = device
@@ -114,15 +120,15 @@ class MCTS:
             self.search(root)
         return max(root.children, key=lambda c: c.visit_count).action
 
-    def search(self, node):
+    def search(self, node, exploration_weight=1.0):
         if node.is_terminal():
             return -node.state.winner
         if not node.is_expanded():
             policy, value = self.evaluate(node)
             node.expand(policy)
             return -value
-        child = node.select_child()
-        value = self.search(child)
+        child = node.select_child(exploration_weight)
+        value = self.search(child, exploration_weight)
         node.update(-value)
         return -value
 
@@ -132,7 +138,12 @@ class MCTS:
         self.model.eval()
         with torch.no_grad():
             policy, value = self.model(board)
-        return policy.cpu().numpy()[0], value.cpu().numpy()[0][0]
+
+        # Apply temperature to policy
+        policy = np.exp(policy.cpu().numpy()[0] / config.TEMPERATURE)
+        policy = policy / np.sum(policy)  # Normalize
+
+        return policy, value.cpu().numpy()[0][0]
 
 def agent(board, action_set):
     board_size = config.BOARD_SIZE
@@ -140,3 +151,4 @@ def agent(board, action_set):
     model.load_state_dict(torch.load(config.MODEL, map_location=device))
     model.to(device)  # Move the model to GPU
     return MCTS(model).get_action(board, action_set)
+

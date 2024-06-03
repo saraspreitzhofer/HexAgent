@@ -10,8 +10,10 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import config
-from multiprocessing import Pool, cpu_count, set_start_method, Manager
 import inspect
+from torch.optim.lr_scheduler import StepLR
+from multiprocessing import Pool, cpu_count
+import itertools
 
 # Suppress TensorFlow logs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -26,7 +28,7 @@ def save_results(losses, win_rates, win_rates_checkpoint, model_folder):
     epochs = range(1, len(losses) + 1)
 
     print(f"checkpoint winrate: [{', '.join(str(element) for element in win_rates_checkpoint)}]")
-    config.save_config_to_json(config.config, filename=os.path.join(model_folder, 'config.json'))
+    save_config_to_file(config, filename=os.path.join(model_folder, 'config.json'))
 
     plt.figure(figsize=(12, 6))
 
@@ -47,18 +49,7 @@ def save_results(losses, win_rates, win_rates_checkpoint, model_folder):
 
     plt.close()
 
-class Counter:
-    def __init__(self, total):
-        self.manager = Manager()
-        self.value = self.manager.Value('i', 0)
-        self.total = total
-        self.lock = self.manager.Lock()
-
-    def increment(self):
-        with self.lock:
-            self.value.value += 1
-
-def play_game(mcts: MCTS, board_size: int, opponent='random', counter: Counter = None):
+def play_game(mcts: MCTS, board_size: int, opponent='random'):
     game = engine.HexPosition(board_size)
     state_history = []
 
@@ -75,37 +66,31 @@ def play_game(mcts: MCTS, board_size: int, opponent='random', counter: Counter =
         game.moove(chosen)
 
     result = game.winner
-    if counter:
-        counter.increment()
     return state_history, result
 
-def play_games(mcts, board_size, num_games, opponent='random', parallel=False):
-    if parallel:
-        # doesn't work right now because of tqdm
-        # counter = Counter(num_games)
+def play_game_worker(args):
+    model_state_dict, board_size, opponent, device = args
+    model = create_model(board_size).to(device)
+    model.load_state_dict(model_state_dict)
+    mcts = MCTS(model)
+    result = play_game(mcts, board_size, opponent)
+    return result
 
-        # def update_progress():
-        #     with tqdm(total=num_games, unit="game") as pbar:
-        #         while True:
-        #             with counter.lock:
-        #                 pbar.n = counter.value.value
-        #             pbar.refresh()
-        #             if counter.value.value >= num_games:
-        #                 break
-
-        # pool = Pool(cpu_count())
-        # watcher = pool.apply_async(update_progress)
-        # results = pool.starmap(play_game, [(mcts, board_size, opponent, counter) for _ in range(num_games)])
-        # pool.close()
-        # pool.join()
-        # watcher.wait()
-
-        with Pool(cpu_count()) as pool:
-            results = pool.starmap(play_game, [(mcts, board_size, opponent) for _ in tqdm(range(num_games), unit='game')])
-
+def play_games(model, board_size, num_games, opponent='random'):
+    model_state_dict = model.state_dict()
+    total_cpus = os.cpu_count()  # Anzahl der verfügbaren CPUs
+    if config.PARALLEL_GAMES:
+        num_threads = min(total_cpus, config.NUM_PARALLEL_THREADS)
+        print(f"Using {num_threads} parallel threads out of {total_cpus} available")
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        with Pool(num_threads) as pool:
+            args = [(model_state_dict, board_size, opponent, device) for _ in range(num_games)]
+            results = list(tqdm(pool.imap(play_game_worker, args), total=num_games, unit='game'))
         return results
     else:
+        print(f"Parallel games disabled. Using a single thread out of {total_cpus} available")
         results = []
+        mcts = MCTS(model)
         for _ in tqdm(range(num_games), unit='game'):
             results.append(play_game(mcts, board_size, opponent))
         return results
@@ -126,7 +111,6 @@ def load_checkpoint(filepath, board_size):
     model.load_state_dict(checkpoint['state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer'])
     return model, optimizer
-
 
 def validate_model(model, board_size, num_games=10):
     model.eval()
@@ -156,11 +140,9 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
 
     with torch.no_grad():
         for checkpoint in tqdm(checkpoints, desc='Checkpoints', unit='checkpoint'):
-            # Load the checkpoint model
             checkpoint_model, _ = load_checkpoint(checkpoint, board_size)
             checkpoint_mcts = MCTS(checkpoint_model)
 
-            # Play games between current model and checkpoint model
             for _ in range(num_games):
                 game = engine.HexPosition(board_size)
                 while game.winner == 0:
@@ -170,54 +152,67 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
                         chosen = checkpoint_mcts.get_action(game.board, game.get_action_space())
                     game.moove(chosen)
 
-                if game.winner == 1:
-                    wins += 1
+                    if game.winner == 1:
+                        wins += 1
 
     win_rate = wins / (num_games * len(checkpoints))
     return win_rate
 
 def setup_device():
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"Using device: {device}")
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+        print(f"Using device: {device} ({torch.cuda.get_device_name(0)})")
+    else:
+        device = torch.device('cpu')
+        print("CUDA device not found. Using CPU.")
     return device
 
 def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_per_epoch=config.NUM_OF_GAMES_PER_EPOCH):
     device = setup_device()
     print("Creating model...")
-    model = create_model(board_size)
+    model = create_model(board_size).to(device)
     mcts = MCTS(model)
     best_loss = float('inf')
     best_model_state = None
 
-    # Create the 'models' folder if it doesn't exist
     models_folder = 'models'
     if not os.path.exists(models_folder):
         os.makedirs(models_folder)
 
-    # Create a new folder for this training session
     current_time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
     model_folder = os.path.join(models_folder, current_time)
     os.makedirs(model_folder)
 
     print("Saving config to file...")
-    save_config_to_file(config, filename=os.path.join(model_folder,'config.py'))
+    save_config_to_file(config, filename=os.path.join(model_folder, 'config.py'))
 
     losses = []
+    policy_losses = []
+    value_losses = []
     win_rates = []
     win_rates_checkpoint = []
 
-    criterion_policy = nn.CrossEntropyLoss()
+    criterion_policy = nn.KLDivLoss(reduction='batchmean')
     criterion_value = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=config.LEARNING_RATE, weight_decay=config.WEIGHT_DECAY)
+    optimizer = optim.Adam(model.parameters(), lr=config.WARMUP_LEARNING_RATE, weight_decay=config.WEIGHT_DECAY)
+    scheduler = StepLR(optimizer, config.STEP_SIZE, gamma=config.GAMMA)
     model.to(device)
 
-    for epoch in range(1, epochs+1):
+    for epoch in range(1, epochs + 1):
         print(f"Starting Epoch {epoch}/{epochs}")
+        if epoch <= config.WARMUP_EPOCHS:
+            lr = config.WARMUP_LEARNING_RATE + (config.LEARNING_RATE - config.WARMUP_LEARNING_RATE) * (epoch / config.WARMUP_EPOCHS)
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = lr
+        elif epoch == config.WARMUP_EPOCHS + 1:
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = config.LEARNING_RATE
+
         if epoch == epochs / 2:
             print("Switching to self-play")
         opponent = 'random' if epoch < epochs // 2 else 'self'
-        results = play_games(mcts, board_size, num_games_per_epoch, opponent=opponent, parallel=config.PARALLEL_GAMES)
-         
+        results = play_games(model, board_size, num_games_per_epoch, opponent=opponent)
+
         states, policies, values = [], [], []
         wins = 0
 
@@ -242,22 +237,23 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
         policy_outputs, value_outputs = model(states)
         policy_loss = criterion_policy(policy_outputs, policies)
         value_loss = criterion_value(value_outputs.squeeze(), values)
-        loss = policy_loss + value_loss
+        loss = config.POLICY_LOSS_WEIGHT * policy_loss + config.VALUE_LOSS_WEIGHT * value_loss
 
         loss.backward()
         optimizer.step()
+        scheduler.step()
 
         losses.append(loss.item())
+        policy_losses.append(policy_loss.item())
+        value_losses.append(value_loss.item())
 
         win_rate = None
 
-        if epoch == 1 or epoch % config.CHECKPOINT_INTERVAL == 0:  # Save checkpoints and validate
+        if epoch == 1 or epoch % config.CHECKPOINT_INTERVAL == 0:
             checkpoint_epoch = 0 if epoch == 1 else epoch
             save_checkpoint(model, optimizer, checkpoint_epoch, model_folder, filename=f'checkpoint_epoch_{checkpoint_epoch}.pth.tar')
-            # only validate if we have enough checkpoints to compare against
             if checkpoint_epoch >= (config.CHECKPOINT_INTERVAL * config.NUM_OF_OPPONENTS_PER_CHECKPOINT):
-                # Validate against the last few checkpoints
-                checkpoints = [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range((epoch) - (config.NUM_OF_OPPONENTS_PER_CHECKPOINT * config.CHECKPOINT_INTERVAL), epoch-config.CHECKPOINT_INTERVAL+1, config.CHECKPOINT_INTERVAL)]
+                checkpoints = [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range((epoch) - (config.NUM_OF_OPPONENTS_PER_CHECKPOINT * config.CHECKPOINT_INTERVAL), epoch - config.CHECKPOINT_INTERVAL + 1, config.CHECKPOINT_INTERVAL)]
                 win_rate = validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder=model_folder, checkpoints=checkpoints)
                 win_rates_checkpoint.append(win_rate)
 
@@ -266,6 +262,7 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
             best_model_state = model.state_dict()
 
         print(f"Completed Epoch {epoch}/{epochs} with loss: {loss.item()}")
+        print(f"Policy Loss: {policy_loss.item()}, Value Loss: {value_loss.item()}")
         if win_rate:
             print(f"Win rate: {win_rate}")
 
@@ -275,6 +272,20 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
     torch.save(best_model_state, os.path.join(best_model_path, 'best_hex_model.pth'))
     save_results(losses, win_rates, win_rates_checkpoint, best_model_path)
 
+    plt.figure(figsize=(12, 6))
+    plt.plot(range(1, len(policy_losses) + 1), policy_losses, label='Policy Loss')
+    plt.plot(range(1, len(value_losses) + 1), value_losses, label='Value Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.title('Policy and Value Losses over Epochs')
+    plt.savefig(os.path.join(model_folder, 'policy_and_value_losses.png'))
+    plt.close()
+
 if __name__ == "__main__":
-    set_start_method('spawn')
+    print("CUDA available: ", torch.cuda.is_available())
+    if torch.cuda.is_available():
+        print("CUDA device name: ", torch.cuda.get_device_name(0))
+    else:
+        print("CUDA device not found. Please check your CUDA installation.")
     train_model()
