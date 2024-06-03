@@ -152,7 +152,6 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
             if config.PARALLEL_GAMES:
                 total_cpus = os.cpu_count()  # Anzahl der verfügbaren CPUs
                 num_threads = min(total_cpus, config.NUM_PARALLEL_THREADS)
-                device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
                 mp.set_start_method('spawn', force=True)
                 with Pool(num_threads) as pool:
                     args = [(board_size, current_mcts, checkpoint_mcts) for _ in range(num_games)]
@@ -161,6 +160,7 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
             else:
                 for _ in range(num_games):
                     wins += play_validation(board_size, current_mcts, checkpoint_mcts)
+            print(f"Win rate against {checkpoint}: {wins} / {num_games}")
             win_rates.append(wins / num_games)
 
     return win_rates
