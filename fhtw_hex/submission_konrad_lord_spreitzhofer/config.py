@@ -27,7 +27,7 @@ NUM_OF_GAMES_PER_CHECKPOINT = 15
 
 
 PARALLEL_GAMES = True # Set to True to parallelize games in training
-NUM_PARALLEL_THREADS = 10 # Number of parallel threads to use (adjust based on CPU)
+NUM_PARALLEL_THREADS = 24 # Number of parallel threads to use (adjust based on CPU)
                          # if number is higher than avaiable threads than max threads will be used
 
 
