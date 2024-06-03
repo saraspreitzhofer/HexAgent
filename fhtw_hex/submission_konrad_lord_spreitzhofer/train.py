@@ -29,8 +29,6 @@ def save_config_to_file(config_module, filename="config.py"):
 def save_results(losses, win_rates, policy_losses, value_losses, model_folder):
     epochs = range(1, len(losses) + 1)
 
-    save_config_to_file(config, filename=os.path.join(model_folder, 'config.json'))
-
     plt.figure(figsize=(12, 6))
 
     plt.subplot(1, 2, 1)
