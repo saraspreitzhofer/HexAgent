@@ -134,7 +134,7 @@ def play_validation(args):
             chosen = checkpoint_mcts.get_action(game.board, game.get_action_space())
         game.moove(chosen)
 
-        return 1 if game.winner == 1 else 0
+    return 1 if game.winner == 1 else 0
 
 def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder='models', checkpoints=[]):
     model.eval()
