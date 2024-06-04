@@ -69,11 +69,14 @@ def play_games(model, board_size, num_games, opponent='random'):
         return results
 
 def play_validation(args):
-    board_size, current_mcts, checkpoint_mcts = args
+    board_size, current_mcts, checkpoint_mcts, random_agent = args
     game = engine.HexPosition(board_size)
     while game.winner == 0:
         if game.player == 1:
             chosen = current_mcts.get_action(game.board, game.get_action_space())
+        elif random_agent:
+            from random import choice
+            chosen = choice(game.get_action_space())  
         else:
             chosen = checkpoint_mcts.get_action(game.board, game.get_action_space())
         game.moove(chosen)
@@ -86,17 +89,18 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
     win_rates = []
 
     with torch.no_grad():
-        for checkpoint in tqdm(checkpoints, desc='Checkpoints', unit='checkpoint'):
+        for i, checkpoint in enumerate(tqdm(checkpoints, desc='Checkpoints', unit='checkpoint')):
             checkpoint_model, _ = load_checkpoint(checkpoint, board_size)
             checkpoint_mcts = MCTS(checkpoint_model)
             wins = 0
+            random_agent = True if i == 0 else False
 
             if config.PARALLEL_GAMES:
                 total_cpus = os.cpu_count()  # Anzahl der verfügbaren CPUs
                 num_threads = min(total_cpus, config.NUM_PARALLEL_THREADS)
                 mp.set_start_method('spawn', force=True)
                 with Pool(num_threads) as pool:
-                    args = [(board_size, current_mcts, checkpoint_mcts) for _ in range(num_games)]
+                    args = [(board_size, current_mcts, checkpoint_mcts, random_agent) for _ in range(num_games)]
                     results = list(tqdm(pool.imap(play_validation, args), total=num_games, unit='game'))
                     wins = sum(results)
                     print(f"results: {results}")
