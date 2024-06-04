@@ -78,7 +78,7 @@ def play_validation(args):
     starter = choice(["current", "checkpoint"])
     if random_agent:
         checkpoint_mcts = RandomAgent()
-    player1, player2 = current_mcts, checkpoint_mcts if starter == "current" else checkpoint_mcts, current_mcts
+    player1, player2 = (current_mcts, checkpoint_mcts) if starter == "current" else (checkpoint_mcts, current_mcts)
     first_choice = True
     while game.winner == 0:
         if first_choice:
