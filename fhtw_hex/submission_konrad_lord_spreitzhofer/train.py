@@ -15,6 +15,7 @@ from torch.optim.lr_scheduler import StepLR
 from multiprocessing import Pool, cpu_count
 import itertools
 import torch.multiprocessing as mp
+from random import choice
 
 from fhtw_hex.submission_konrad_lord_spreitzhofer.utils import load_checkpoint, save_checkpoint, save_config_to_file, save_results, setup_device
 
@@ -31,7 +32,6 @@ def play_game(mcts: MCTS, board_size: int, opponent='random'):
             chosen = mcts.get_action(game.board, game.get_action_space())
         else:
             if opponent == 'random':
-                from random import choice
                 chosen = choice(game.get_action_space())
             elif opponent == 'self':
                 chosen = mcts.get_action(game.board, game.get_action_space())
@@ -68,20 +68,31 @@ def play_games(model, board_size, num_games, opponent='random'):
             results.append(play_game(mcts, board_size, opponent))
         return results
 
+class RandomAgent:
+    def get_action(board, action_space):
+        return choice(action_space)  
+
 def play_validation(args):
     board_size, current_mcts, checkpoint_mcts, random_agent = args
     game = engine.HexPosition(board_size)
+    starter = choice(["current", "checkpoint"])
+    if random_agent:
+        checkpoint_mcts = RandomAgent()
+    player1, player2 = current_mcts, checkpoint_mcts if starter == "current" else checkpoint_mcts, current_mcts
+    first_choice = True
     while game.winner == 0:
-        if game.player == 1:
-            chosen = current_mcts.get_action(game.board, game.get_action_space())
-        elif random_agent:
-            from random import choice
-            chosen = choice(game.get_action_space())  
+        if first_choice:
+            chosen = choice(game.get_action_space())
+            first_choice = False
+        elif game.player == 1:
+            chosen = player1.get_action(game.board, game.get_action_space())
         else:
-            chosen = checkpoint_mcts.get_action(game.board, game.get_action_space())
+            chosen = player2.get_action(game.board, game.get_action_space())
         game.moove(chosen)
 
-    return 1 if game.winner == 1 else 0
+    move_count = len(game.history)
+    
+    return 1 if ((game.winner == 1 and starter == "current") or (game.winner == -1 and starter == "checkpoint")) else 0
 
 def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder='models', checkpoints=[]):
     model.eval()
