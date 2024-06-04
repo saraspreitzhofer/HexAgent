@@ -116,7 +116,8 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
                     wins = sum(results)
             else:
                 for _ in range(num_games):
-                    wins += play_validation(board_size, current_mcts, checkpoint_mcts)
+                    args = (board_size, current_mcts, checkpoint_mcts, random_agent)
+                    wins += play_validation(args)
             win_rates.append(wins / num_games)
 
     return win_rates
