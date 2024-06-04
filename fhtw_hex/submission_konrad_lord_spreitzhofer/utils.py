@@ -20,6 +20,16 @@ def save_results(losses, win_rates, policy_losses, value_losses, model_folder):
     plt.title('Loss over Epochs')
 
     plt.subplot(1, 2, 2)
+    plt.plot(range(1, len(policy_losses) + 1), policy_losses, label='Policy Loss')
+    plt.plot(range(1, len(value_losses) + 1), value_losses, label='Value Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.title('Policy and Value Losses over Epochs')
+    plt.savefig(os.path.join(model_folder, 'policy_and_value_losses.png'))
+    plt.close()
+
+    plt.figure(figsize=(12, 6))
     for i, win_rate in enumerate(win_rates):
         start_epoch = i * config.CHECKPOINT_INTERVAL + 1
         plt.plot(range(start_epoch, start_epoch + len(win_rate)), win_rate, label=f'Checkpoint {start_epoch}')
@@ -28,16 +38,6 @@ def save_results(losses, win_rates, policy_losses, value_losses, model_folder):
     plt.legend()
     plt.title('Win Rate over Checkpoints')
     plt.savefig(os.path.join(model_folder, 'loss_and_win_rate.png'))
-    plt.close()
-
-    plt.figure(figsize=(12, 6))
-    plt.plot(range(1, len(policy_losses) + 1), policy_losses, label='Policy Loss')
-    plt.plot(range(1, len(value_losses) + 1), value_losses, label='Value Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.title('Policy and Value Losses over Epochs')
-    plt.savefig(os.path.join(model_folder, 'policy_and_value_losses.png'))
     plt.close()
 
 def save_config_to_file(config_module, filename="config.py"):
