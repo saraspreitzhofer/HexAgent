@@ -92,12 +92,14 @@ def play_validation(args):
 
     move_count = len(game.history)
     
-    return 1 if ((game.winner == 1 and starter == "current") or (game.winner == -1 and starter == "checkpoint")) else 0
+    result = 1 if ((game.winner == 1 and starter == "current") or (game.winner == -1 and starter == "checkpoint")) else 0
+    return result, move_count
 
 def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder='models', checkpoints=[]):
     model.eval()
     current_mcts = MCTS(model)
     win_rates = []
+    total_moves = []
 
     with torch.no_grad():
         for i, checkpoint in enumerate(tqdm(checkpoints, desc='Checkpoints', unit='checkpoint')):
@@ -113,14 +115,20 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
                 with Pool(num_threads) as pool:
                     args = [(board_size, current_mcts, checkpoint_mcts, random_agent) for _ in range(num_games)]
                     results = list(tqdm(pool.imap(play_validation, args), total=num_games, unit='game'))
-                    wins = sum(results)
+                    win_results, move_counts = zip(*results)
+                    wins = sum(win_results)
+                    total_moves = sum(move_counts)
             else:
                 for _ in range(num_games):
                     args = (board_size, current_mcts, checkpoint_mcts, random_agent)
-                    wins += play_validation(args)
+                    win_result, move_count = play_validation(args)
+                    wins += win_result
+                    total_moves += move_count
             win_rates.append(wins / num_games)
+            total_moves.append(total_moves / num_games)
+            
 
-    return win_rates
+    return win_rates, total_moves
 
 def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_per_epoch=config.NUM_OF_GAMES_PER_EPOCH):
     device = setup_device()
@@ -146,6 +154,7 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
     value_losses = []
     win_rates = []
     win_rates_checkpoint = []
+    total_moves = []
 
     criterion_policy = nn.KLDivLoss(reduction='batchmean')
     criterion_value = nn.MSELoss()
@@ -207,29 +216,29 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
             checkpoint_epoch = 0 if epoch == 1 else epoch
             save_checkpoint(model, optimizer, checkpoint_epoch, model_folder, filename=f'checkpoint_epoch_{checkpoint_epoch}.pth.tar')
             win_rates.append([])
+            total_moves.append([])
             # if checkpoint_epoch >= (config.CHECKPOINT_INTERVAL * config.NUM_OF_OPPONENTS_PER_CHECKPOINT):
             #     checkpoints = [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range((epoch) - (config.NUM_OF_OPPONENTS_PER_CHECKPOINT * config.CHECKPOINT_INTERVAL), epoch - config.CHECKPOINT_INTERVAL + 1, config.CHECKPOINT_INTERVAL)]
             #     win_rate = validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder=model_folder, checkpoints=checkpoints)
             #     win_rates_checkpoint.append(win_rate)
 
-        win_rates_checkpoint = validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder=model_folder, checkpoints=[os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range(0, epoch + 1, config.CHECKPOINT_INTERVAL)])
+        win_rates_checkpoint, total_moves_checkpoint = validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder=model_folder, checkpoints=[os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range(0, epoch + 1, config.CHECKPOINT_INTERVAL)])
         for i, wr in enumerate(win_rates_checkpoint):
             win_rates[i].append(wr)
-
-        print(win_rates)
+        for i, tm in enumerate(total_moves_checkpoint):
+            total_moves[i].append(tm)
 
         if loss.item() < best_loss:
             best_loss = loss.item()
             best_model_state = model.state_dict()
 
-        print(f"Completed Epoch {epoch}/{epochs} with loss: {loss.item()}")
-        print(f"Policy Loss: {policy_loss.item()}, Value Loss: {value_loss.item()}")
+        print(f"Completed Epoch {epoch}/{epochs} with Policy Loss: {policy_loss.item()}, Value Loss: {value_loss.item()}, Win Rates: {win_rates_checkpoint}, Total Moves: {total_moves_checkpoint}")
 
     best_model_path = os.path.join(model_folder, 'best_loss')
     if not os.path.exists(best_model_path):
         os.makedirs(best_model_path)
     torch.save(best_model_state, os.path.join(best_model_path, 'best_hex_model.pth'))
-    save_results(losses, win_rates, policy_losses, value_losses, best_model_path)
+    save_results(losses, win_rates, policy_losses, value_losses, best_model_path, total_moves)
 
 if __name__ == "__main__":
     print("CUDA available: ", torch.cuda.is_available())

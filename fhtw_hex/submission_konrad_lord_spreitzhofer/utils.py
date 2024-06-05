@@ -7,7 +7,7 @@ import config
 import inspect
 import torch.multiprocessing as mp
 
-def save_results(losses, win_rates, policy_losses, value_losses, model_folder):
+def save_results(losses, win_rates, policy_losses, value_losses, model_folder, total_moves):
     epochs = range(1, len(losses) + 1)
 
     plt.figure(figsize=(12, 6))
@@ -26,10 +26,11 @@ def save_results(losses, win_rates, policy_losses, value_losses, model_folder):
     plt.ylabel('Loss')
     plt.legend()
     plt.title('Policy and Value Losses over Epochs')
-    plt.savefig(os.path.join(model_folder, 'policy_and_value_losses.png'))
+    plt.savefig(os.path.join(model_folder, 'loss.png'))
     plt.close()
 
     plt.figure(figsize=(12, 6))
+    plt.subplot(1, 2, 1)
     for i, win_rate in enumerate(win_rates):
         start_epoch = i * config.CHECKPOINT_INTERVAL + 1
         plt.plot(range(start_epoch, start_epoch + len(win_rate)), win_rate, label=f'Checkpoint {start_epoch}')
@@ -37,7 +38,15 @@ def save_results(losses, win_rates, policy_losses, value_losses, model_folder):
     plt.ylabel('Win Rate')
     plt.legend()
     plt.title('Win Rate over Checkpoints')
-    plt.savefig(os.path.join(model_folder, 'loss_and_win_rate.png'))
+    plt.subplot(1, 2, 2)
+    for i, moves in enumerate(total_moves):
+        start_epoch = i * config.CHECKPOINT_INTERVAL + 1
+        plt.plot(range(start_epoch, start_epoch + len(moves)), moves, label=f'Checkpoint {start_epoch}')
+    plt.xlabel('Epoch')
+    plt.ylabel('Moves')
+    plt.legend()
+    plt.title('Moves over Checkpoints')
+    plt.savefig(os.path.join(model_folder, 'wr_moves.png'))
     plt.close()
 
 def save_config_to_file(config_module, filename="config.py"):
