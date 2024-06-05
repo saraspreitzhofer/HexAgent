@@ -1,12 +1,13 @@
 from copy import deepcopy
 import numpy as np
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.layers import Input, Conv2D, Dense, Flatten
-from tensorflow.keras import models
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
 from fhtw_hex import hex_engine as engine
 from fhtw_hex.submission_konrad_lord_spreitzhofer import config
 
-
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class Node:
     hex_position_class = engine.HexPosition
 
@@ -45,22 +46,73 @@ class Node:
                          action_space=self.action_space)
                 )
 
-    def select_child(self):
-        return max(self.children, key=lambda x: x.value())
+    def select_child(self, exploration_weight=1.0):
+        return max(self.children, key=lambda x: x.value(exploration_weight))
 
     def update(self, value):
         self.visit_count += 1
         self.value_sum += value
 
-    def value(self):
-        epsilon = 1e-6  # Small value to prevent division by zero
-        return self.value_sum / (self.visit_count + epsilon) + self.prior
+    def value(self, exploration_weight=1.0):
+        epsilon = 1e-6
+        if self.visit_count == 0:
+            return float('inf')
+        exploitation = self.value_sum / (self.visit_count + epsilon)
+        exploration = exploration_weight * self.prior * np.sqrt(
+            np.log(self.parent.visit_count + 1) / (self.visit_count + epsilon))
+        return exploitation + exploration
 
+class ResidualBlock(nn.Module):
+    def __init__(self, channels):
+        super(ResidualBlock, self).__init__()
+        self.conv1 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(channels)
+        self.conv2 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm2d(channels)
 
+    def forward(self, x):
+        residual = x
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+        out += residual
+        out = F.relu(out)
+        return out
+
+class HexNet(nn.Module):
+    def __init__(self, board_size):
+        super(HexNet, self).__init__()
+        self.board_size = board_size
+        self.conv1 = nn.Conv2d(1, 64, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(64)
+        
+        self.residual_blocks = nn.ModuleList([ResidualBlock(64) for _ in range(5)])
+        
+        self.flatten = nn.Flatten()
+        self.policy_head = nn.Linear(64 * board_size * board_size, board_size * board_size)
+        self.value_head = nn.Linear(64 * board_size * board_size, 1)
+
+    def forward(self, x):
+        x = F.relu(self.bn1(self.conv1(x)))
+        
+        for block in self.residual_blocks:
+            x = block(x)
+        
+        x = self.flatten(x)
+        policy =  F.log_softmax(self.policy_head(x), dim=1)
+        value = torch.tanh(self.value_head(x))
+        return policy, value
+
+def create_model(board_size):
+    model = HexNet(board_size).to(device)
+    return model
+
+# In facade.py
 class MCTS:
-    def __init__(self, model, simulations=100):
+    def __init__(self, model, simulations=config.MCTS_SIMULATIONS, device=device):
         self.model = model
         self.simulations = simulations
+        self.device = device
+        self.model.to(self.device)  # Ensure the model is on the GPU
 
     def get_action(self, state, action_set):
         root = Node(state, action_set)
@@ -68,39 +120,35 @@ class MCTS:
             self.search(root)
         return max(root.children, key=lambda c: c.visit_count).action
 
-    def search(self, node):
+    def search(self, node, exploration_weight=1.0):
         if node.is_terminal():
             return -node.state.winner
         if not node.is_expanded():
             policy, value = self.evaluate(node)
             node.expand(policy)
             return -value
-        child = node.select_child()
-        value = self.search(child)
+        child = node.select_child(exploration_weight)
+        value = self.search(child, exploration_weight)
         node.update(-value)
         return -value
 
     def evaluate(self, node):
-        board = np.array(node.state).reshape((1, config.BOARD_SIZE, config.BOARD_SIZE, 1))
-        policy, value = self.model.predict(board, verbose=0)
-        return policy[0], value[0][0]
+        board = np.array(node.state).reshape((1, 1, config.BOARD_SIZE, config.BOARD_SIZE)).astype(np.float32)
+        board = torch.tensor(board, device=self.device)
+        self.model.eval()
+        with torch.no_grad():
+            policy, value = self.model(board)
 
+        # Apply temperature to policy
+        policy = np.exp(policy.cpu().numpy()[0] / config.TEMPERATURE)
+        policy = policy / np.sum(policy)  # Normalize
 
-def create_model(board_size):
-    inputs = Input(shape=(board_size, board_size, 1))
-    x = Conv2D(32, (3, 3), padding='same', activation='relu')(inputs)
-    x = Conv2D(64, (3, 3), padding='same', activation='relu')(x)
-    x = Flatten()(x)
-    policy = Dense(board_size * board_size, activation='softmax', name='policy_output')(x)
-    value = Dense(1, activation='tanh', name='value_output')(x)
-    model = models.Model(inputs=inputs, outputs=[policy, value])
-    model.compile(loss=['categorical_crossentropy', 'mean_squared_error'], optimizer=Adam(learning_rate=0.001))
-    return model
-
-
-# Here should be the necessary Python wrapper for your model, in the form of a callable agent, such as above.
-# Please make sure that the agent does actually work with the provided Hex module.
+        return policy, value.cpu().numpy()[0][0]
 
 def agent(board, action_set):
-    model = models.load_model(config.MODEL)
+    board_size = config.BOARD_SIZE
+    model = create_model(board_size)
+    model.load_state_dict(torch.load(config.MODEL, map_location=device))
+    model.to(device)  # Move the model to GPU
     return MCTS(model).get_action(board, action_set)
+

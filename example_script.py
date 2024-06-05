@@ -17,6 +17,8 @@ game = engine.HexPosition()
 # make sure that the agent you have provided is such that the following three
 # method-calls are error-free and as expected
 
+game.human_vs_machine(machine=agent)
+
 # let your agent play against random
 game.machine_vs_machine(machine1=agent, machine2=None)
 game.machine_vs_machine(machine1=None, machine2=agent)

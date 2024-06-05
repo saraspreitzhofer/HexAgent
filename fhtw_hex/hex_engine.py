@@ -9,10 +9,10 @@ from fhtw_hex.submission_konrad_lord_spreitzhofer import config
 class HexPosition(object):
     """
     Objects of this class correspond to a game of Hex.
-    
+
     Attributes
     ----------
-    size : int 
+    size : int
         The size of the board. The board is 'size*size'.
     board : list[list[int]]
         An array representing the hex board. '0' means empty. '1' means 'white'. '-1' means 'black'.
@@ -21,7 +21,7 @@ class HexPosition(object):
     winner : int
         Whether the game is won and by whom. '0' means 'no winner'. '1' means 'white' has won. '-1' means 'black' has won.
     history : list[list[list[int]]]
-        A list of board-state arrays. Stores the history of play.    
+        A list of board-state arrays. Stores the history of play.
     """
 
     def __init__(self, size=config.BOARD_SIZE):  # todo change to 7 for the final submission
@@ -370,3 +370,4 @@ class HexPosition(object):
         file = open(path, 'ab')
         pickle.dump(self, file)
         file.close()
+
