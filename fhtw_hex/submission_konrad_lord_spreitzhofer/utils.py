@@ -7,7 +7,7 @@ import config
 import inspect
 import torch.multiprocessing as mp
 
-def save_results(losses, win_rates, policy_losses, value_losses, model_folder, total_moves):
+def save_results(losses, win_rates, policy_losses, value_losses, model_folder, avg_moves):
     epochs = range(1, len(losses) + 1)
 
     plt.figure(figsize=(12, 6))
@@ -39,7 +39,7 @@ def save_results(losses, win_rates, policy_losses, value_losses, model_folder, t
     plt.legend()
     plt.title('Win Rate over Checkpoints')
     plt.subplot(1, 2, 2)
-    for i, moves in enumerate(total_moves):
+    for i, moves in enumerate(avg_moves):
         start_epoch = i * config.CHECKPOINT_INTERVAL + 1
         plt.plot(range(start_epoch, start_epoch + len(moves)), moves, label=f'Checkpoint {start_epoch}')
     plt.xlabel('Epoch')
