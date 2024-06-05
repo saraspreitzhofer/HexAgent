@@ -69,7 +69,7 @@ def play_games(model, board_size, num_games, opponent='random'):
         return results
 
 class RandomAgent:
-    def get_action(board, action_space):
+    def get_action(self, board, action_space):
         return choice(action_space)  
 
 def play_validation(args):
