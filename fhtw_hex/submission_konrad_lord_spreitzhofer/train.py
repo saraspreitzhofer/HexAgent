@@ -99,7 +99,7 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
     model.eval()
     current_mcts = MCTS(model)
     win_rates = []
-    total_moves = []
+    move_rates = []
 
     with torch.no_grad():
         for i, checkpoint in enumerate(tqdm(checkpoints, desc='Checkpoints', unit='checkpoint')):
@@ -117,18 +117,18 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
                     results = list(tqdm(pool.imap(play_validation, args), total=num_games, unit='game'))
                     win_results, move_counts = zip(*results)
                     wins = sum(win_results)
-                    total_moves = sum(move_counts)
+                    moves = sum(move_counts)
             else:
                 for _ in range(num_games):
                     args = (board_size, current_mcts, checkpoint_mcts, random_agent)
                     win_result, move_count = play_validation(args)
                     wins += win_result
-                    total_moves += move_count
+                    moves += move_count
             win_rates.append(wins / num_games)
-            total_moves.append(total_moves / num_games)
+            move_rates.append(move_rates / num_games)
             
 
-    return win_rates, total_moves
+    return win_rates, move_rates
 
 def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_per_epoch=config.NUM_OF_GAMES_PER_EPOCH):
     device = setup_device()
