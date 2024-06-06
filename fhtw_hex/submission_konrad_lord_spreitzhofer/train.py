@@ -217,6 +217,7 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
             win_rates.append([])
             avg_moves.append([])
 
+        win_rates_checkpoint, avg_moves_checkpoint = [], []  # Initialize variables
         if epoch % config.EVALUATION_INTERVAL == 0:
             win_rates_checkpoint, avg_moves_checkpoint = validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder=model_folder, checkpoints=[os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range(0, epoch + 1, config.CHECKPOINT_INTERVAL)])
             for i, wr in enumerate(win_rates_checkpoint):
@@ -244,4 +245,6 @@ if __name__ == "__main__":
         print("CUDA device not found. Please check your CUDA installation.")
     mp.set_start_method('spawn')
     train_model()
+
+
 
