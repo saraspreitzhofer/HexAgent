@@ -211,22 +211,18 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
         policy_losses.append(policy_loss.item())
         value_losses.append(value_loss.item())
 
-
         if epoch == 1 or epoch % config.CHECKPOINT_INTERVAL == 0:
             checkpoint_epoch = 0 if epoch == 1 else epoch
             save_checkpoint(model, optimizer, checkpoint_epoch, model_folder, filename=f'checkpoint_epoch_{checkpoint_epoch}.pth.tar')
             win_rates.append([])
             avg_moves.append([])
-            # if checkpoint_epoch >= (config.CHECKPOINT_INTERVAL * config.NUM_OF_OPPONENTS_PER_CHECKPOINT):
-            #     checkpoints = [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range((epoch) - (config.NUM_OF_OPPONENTS_PER_CHECKPOINT * config.CHECKPOINT_INTERVAL), epoch - config.CHECKPOINT_INTERVAL + 1, config.CHECKPOINT_INTERVAL)]
-            #     win_rate = validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder=model_folder, checkpoints=checkpoints)
-            #     win_rates_checkpoint.append(win_rate)
 
-        win_rates_checkpoint, avg_moves_checkpoint = validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder=model_folder, checkpoints=[os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range(0, epoch + 1, config.CHECKPOINT_INTERVAL)])
-        for i, wr in enumerate(win_rates_checkpoint):
-            win_rates[i].append(wr)
-        for i, tm in enumerate(avg_moves_checkpoint):
-            avg_moves[i].append(tm)
+        if epoch % config.EVALUATION_INTERVAL == 0:
+            win_rates_checkpoint, avg_moves_checkpoint = validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder=model_folder, checkpoints=[os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range(0, epoch + 1, config.CHECKPOINT_INTERVAL)])
+            for i, wr in enumerate(win_rates_checkpoint):
+                win_rates[i].append(wr)
+            for i, tm in enumerate(avg_moves_checkpoint):
+                avg_moves[i].append(tm)
 
         if loss.item() < best_loss:
             best_loss = loss.item()
@@ -248,3 +244,4 @@ if __name__ == "__main__":
         print("CUDA device not found. Please check your CUDA installation.")
     mp.set_start_method('spawn')
     train_model()
+
