@@ -1,13 +1,15 @@
-from copy import deepcopy
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+from copy import deepcopy
 from fhtw_hex import hex_engine as engine
 from fhtw_hex.submission_konrad_lord_spreitzhofer import config
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
 class Node:
     hex_position_class = engine.HexPosition
 
@@ -62,6 +64,7 @@ class Node:
             np.log(self.parent.visit_count + 1) / (self.visit_count + epsilon))
         return exploitation + exploration
 
+
 class ResidualBlock(nn.Module):
     def __init__(self, channels):
         super(ResidualBlock, self).__init__()
@@ -78,46 +81,53 @@ class ResidualBlock(nn.Module):
         out = F.relu(out)
         return out
 
+
 class HexNet(nn.Module):
     def __init__(self, board_size):
         super(HexNet, self).__init__()
         self.board_size = board_size
         self.conv1 = nn.Conv2d(1, 64, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(64)
-        
-        self.residual_blocks = nn.ModuleList([ResidualBlock(64) for _ in range(5)])
-        
+
+        self.residual_blocks = nn.ModuleList([ResidualBlock(64) for _ in range(3)]) #Anzahl der Blöce
+
         self.flatten = nn.Flatten()
         self.policy_head = nn.Linear(64 * board_size * board_size, board_size * board_size)
         self.value_head = nn.Linear(64 * board_size * board_size, 1)
 
     def forward(self, x):
         x = F.relu(self.bn1(self.conv1(x)))
-        
+
         for block in self.residual_blocks:
             x = block(x)
-        
+
         x = self.flatten(x)
-        policy =  F.log_softmax(self.policy_head(x), dim=1)
+        policy = F.log_softmax(self.policy_head(x), dim=1)
         value = torch.tanh(self.value_head(x))
         return policy, value
+
 
 def create_model(board_size):
     model = HexNet(board_size).to(device)
     return model
 
-# In facade.py
+
 class MCTS:
-    def __init__(self, model, simulations=config.MCTS_SIMULATIONS, device=device):
+    def __init__(self, model, simulations=config.MCTS_SIMULATIONS, device=device, epsilon=config.EPSILON_START):
         self.model = model
         self.simulations = simulations
         self.device = device
-        self.model.to(self.device)  # Ensure the model is on the GPU
+        self.epsilon = epsilon
+        self.model.to(self.device)
 
     def get_action(self, state, action_set):
         root = Node(state, action_set)
         for _ in range(self.simulations):
             self.search(root)
+
+        if np.random.rand() < self.epsilon:
+            return np.random.choice(root.children).action
+
         return max(root.children, key=lambda c: c.visit_count).action
 
     def search(self, node, exploration_weight=1.0):
@@ -145,10 +155,10 @@ class MCTS:
 
         return policy, value.cpu().numpy()[0][0]
 
+
 def agent(board, action_set):
     board_size = config.BOARD_SIZE
     model = create_model(board_size)
     model.load_state_dict(torch.load(config.MODEL, map_location=device))
     model.to(device)  # Move the model to GPU
     return MCTS(model).get_action(board, action_set)
-
