@@ -79,7 +79,7 @@ def play_validation(args):
     while game.winner == 0:
         if first_choice:
             if starter == "current":
-                # Current agent (player1) macht den ersten Zug gemäß seiner Strategie
+                # Current agent (player1) macht den ersten Zug
                 chosen = player1.get_action(game.board, game.get_action_space())
             else:
                 # Checkpoint agent (player2) macht den ersten Zug zufällig
@@ -98,16 +98,23 @@ def play_validation(args):
     result = 1 if ((game.winner == 1 and starter == "current") or (game.winner == -1 and starter == "checkpoint")) else 0
     return result, move_count
 
-def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder='models', checkpoints=[]):
+
+def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder='models',
+                                 checkpoints=[]):
     model.eval()
     current_mcts = MCTS(model)
     win_rates = []
     move_rates = []
 
     with torch.no_grad():
-        for i, checkpoint in enumerate(tqdm(checkpoints[:config.NUM_OF_AGENTS + 1], desc='Checkpoints', unit='checkpoint')):  # Including RandomAgent
-            checkpoint_model, _ = load_checkpoint(checkpoint, board_size)
-            checkpoint_mcts = MCTS(checkpoint_model)
+        for i, checkpoint in enumerate(tqdm(checkpoints[:config.NUM_OF_AGENTS + 1], desc='Checkpoints',
+                                            unit='checkpoint')):  # Including RandomAgent
+            if 'random_agent_checkpoint.pth.tar' in checkpoint:
+                checkpoint_mcts = RandomAgent()
+            else:
+                checkpoint_model, _ = load_checkpoint(checkpoint, board_size)
+                checkpoint_mcts = MCTS(checkpoint_model)
+
             wins = 0
             total_moves = 0
             random_agent = True if i == 0 else False
@@ -149,14 +156,18 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
     model_folder = os.path.join(models_folder, current_time)
     os.makedirs(model_folder)
 
+    # Save a RandomAgent checkpoint
+    random_agent_checkpoint_path = os.path.join(model_folder, 'random_agent_checkpoint.pth.tar')
+    torch.save({'state_dict': None, 'optimizer': None}, random_agent_checkpoint_path)
+
     print("Saving config to file...")
     save_config_to_file(config, filename=os.path.join(model_folder, 'config.py'))
 
     losses = []
     policy_losses = []
     value_losses = []
-    win_rates = [[] for _ in range(config.NUM_OF_AGENTS + 1)]
-    avg_moves = [[] for _ in range(config.NUM_OF_AGENTS + 1)]
+    win_rates = [[] for _ in range(config.NUM_OF_AGENTS + 1)]  # Including Random Agent
+    avg_moves = [[] for _ in range(config.NUM_OF_AGENTS + 1)]  # Including Random Agent
 
     criterion_policy = nn.KLDivLoss(reduction='batchmean')
     criterion_value = nn.MSELoss()
@@ -217,12 +228,12 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
 
         win_rates_checkpoint, avg_moves_checkpoint = [], []
         if epoch % config.EVALUATION_INTERVAL == 0 or epoch == epochs:
-            checkpoints = [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range(config.CHECKPOINT_INTERVAL, epoch + 1, config.CHECKPOINT_INTERVAL)]
+            checkpoints = [random_agent_checkpoint_path] + [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range(config.CHECKPOINT_INTERVAL, epoch + 1, config.CHECKPOINT_INTERVAL)]
+            print(f"Evaluating against checkpoints: {checkpoints}")
             win_rates_checkpoint, avg_moves_checkpoint = validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder=model_folder, checkpoints=checkpoints)
-            for i, wr in enumerate(win_rates_checkpoint):
+            for i, (wr, am) in enumerate(zip(win_rates_checkpoint, avg_moves_checkpoint)):
                 win_rates[i].append(wr)
-            for i, tm in enumerate(avg_moves_checkpoint):
-                avg_moves[i].append(tm)
+                avg_moves[i].append(am)
 
         total_loss = policy_loss.item() + value_loss.item()
         print(f"Completed Epoch {epoch}/{epochs} with Loss: {total_loss}, Policy Loss: {policy_loss.item()}, Value Loss: {value_loss.item()}")
