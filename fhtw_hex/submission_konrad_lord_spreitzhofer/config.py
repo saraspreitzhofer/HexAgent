@@ -1,7 +1,7 @@
 BOARD_SIZE = 4
 
 #MCTS
-EPOCHS = 20
+EPOCHS = 33
 NUM_OF_GAMES_PER_EPOCH = 30
 MCTS_SIMULATIONS = 600
 TEMPERATURE = 1.0
@@ -14,7 +14,7 @@ WEIGHT_DECAY = 1e-3
 STEP_SIZE = 5
 GAMMA = 0.90
 BATCH_SIZE = 32
-WARMUP_EPOCHS = 5  # Number of warm-up epochs
+WARMUP_EPOCHS = 3  # Number of warm-up epochs
 WARMUP_LEARNING_RATE = 1e-6  # Initial learning rate for warm-up
 RANDOM_EPOCHS = 5  # Number of random policy epochs(playing against random agent)
 
