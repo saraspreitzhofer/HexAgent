@@ -20,7 +20,7 @@ RANDOM_EPOCHS = 5  # Number of random policy epochs(playing against random agent
 
 #Evaluation
 
-EVALUATION_INTERVAL = 5
+EVALUATION_INTERVAL = 2
 CHECKPOINT_INTERVAL = 20
 NUM_OF_GAMES_PER_CHECKPOINT = 10
 
