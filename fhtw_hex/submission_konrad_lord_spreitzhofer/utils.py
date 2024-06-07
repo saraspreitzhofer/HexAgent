@@ -7,8 +7,15 @@ import config
 import inspect
 import torch.multiprocessing as mp
 
+import numpy as np
+
+def moving_average(data, window_size):
+    return np.convolve(data, np.ones(window_size)/window_size, mode='valid')
+
+
 def save_results(losses, win_rates, policy_losses, value_losses, model_folder, avg_moves):
     epochs = range(1, len(losses) + 1)
+    window_size = 5  # Fenstergröße für Moving Average
 
     plt.figure(figsize=(12, 6))
 
@@ -33,15 +40,18 @@ def save_results(losses, win_rates, policy_losses, value_losses, model_folder, a
     plt.subplot(1, 2, 1)
     for i, win_rate in enumerate(win_rates):
         start_epoch = i * config.CHECKPOINT_INTERVAL + 1
-        plt.plot(range(start_epoch, start_epoch + len(win_rate)), win_rate, label=f'Checkpoint {start_epoch}')
+        ma_win_rate = moving_average(win_rate, window_size)
+        plt.plot(range(start_epoch + window_size - 1, start_epoch + len(ma_win_rate)), ma_win_rate, label=f'Checkpoint {start_epoch}')
     plt.xlabel('Epoch')
     plt.ylabel('Win Rate')
     plt.legend()
     plt.title('Win Rate over Checkpoints')
+
     plt.subplot(1, 2, 2)
     for i, moves in enumerate(avg_moves):
         start_epoch = i * config.CHECKPOINT_INTERVAL + 1
-        plt.plot(range(start_epoch, start_epoch + len(moves)), moves, label=f'Checkpoint {start_epoch}')
+        ma_moves = moving_average(moves, window_size)
+        plt.plot(range(start_epoch + window_size - 1, start_epoch + len(ma_moves)), ma_moves, label=f'Checkpoint {start_epoch}')
     plt.xlabel('Epoch')
     plt.ylabel('Moves')
     plt.legend()
