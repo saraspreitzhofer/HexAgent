@@ -7,8 +7,13 @@ import inspect
 from facade import MCTS, create_model
 import torch.optim as optim
 
+import matplotlib.pyplot as plt
+import os
+import numpy as np
+import config
 
-def save_results(losses, win_rates, policy_losses, value_losses, model_folder, avg_moves):
+
+def save_results(losses, win_rates, policy_losses, value_losses, model_folder, avg_moves, checkpoints):
     epochs = range(1, len(losses) + 1)
 
     plt.figure(figsize=(12, 6))
@@ -31,44 +36,57 @@ def save_results(losses, win_rates, policy_losses, value_losses, model_folder, a
     plt.close()
 
     # Plot for Win Rate and Moves over Checkpoints
-    num_agents = len(win_rates)
-    num_plots = (num_agents + 2) // 3  # Calculate the number of plots needed
-    for i in range(num_plots):
-        start_index = i * 3
-        end_index = min(start_index + 3, num_agents)
+    num_plots = (len(win_rates) + 2) // 3  # Anzahl der benötigten Plots
 
+    for plot_idx in range(num_plots):
         plt.figure(figsize=(12, 6))
 
-        plt.subplot(1, 2, 1)
-        for j in range(start_index, end_index):
-            agent_win_rate = win_rates[j]
-            start_epoch = j * config.CHECKPOINT_INTERVAL + config.CHECKPOINT_INTERVAL
-            plt.plot(range(start_epoch, start_epoch + len(agent_win_rate)), agent_win_rate,
-                     label=f'Checkpoint {start_epoch}')
+        for i in range(plot_idx * 3, min((plot_idx + 1) * 3, len(win_rates))):
+            if i == 0:
+                label = "Random_Agent"
+            else:
+                label = f"Agent_Checkpoint_Epoch_{(i - 1) * config.CHECKPOINT_INTERVAL + config.CHECKPOINT_INTERVAL}"
+            plt.subplot(1, 2, 1)
+            plt.plot(range(config.EVALUATION_INTERVAL, config.EVALUATION_INTERVAL * len(win_rates[i]) + 1,
+                           config.EVALUATION_INTERVAL), win_rates[i], label=label)
+
         plt.xlabel('Epoch')
         plt.ylabel('Win Rate')
         plt.legend()
         plt.title('Win Rate over Checkpoints')
 
-        plt.subplot(1, 2, 2)
-        for j in range(start_index, end_index):
-            agent_moves = avg_moves[j]
-            start_epoch = j * config.CHECKPOINT_INTERVAL + config.CHECKPOINT_INTERVAL
-            plt.plot(range(start_epoch, start_epoch + len(agent_moves)), agent_moves, label=f'Checkpoint {start_epoch}')
+        for i in range(plot_idx * 3, min((plot_idx + 1) * 3, len(avg_moves))):
+            if i == 0:
+                label = "Random_Agent"
+            else:
+                label = f"Agent_Checkpoint_Epoch_{(i - 1) * config.CHECKPOINT_INTERVAL + config.CHECKPOINT_INTERVAL}"
+            plt.subplot(1, 2, 2)
+            plt.plot(range(config.EVALUATION_INTERVAL, config.EVALUATION_INTERVAL * len(avg_moves[i]) + 1,
+                           config.EVALUATION_INTERVAL), avg_moves[i], label=label)
+
         plt.xlabel('Epoch')
         plt.ylabel('Moves')
         plt.legend()
         plt.title('Moves over Checkpoints')
-        plt.savefig(os.path.join(model_folder, f'wr_moves_{i + 1}.png'))
+        plt.savefig(os.path.join(model_folder, f'wr_moves_{plot_idx + 1}.png'))
         plt.close()
 
+    plt.subplot(1, 2, 2)
+    for i, moves in enumerate(avg_moves):
+        label = 'Random_Agent' if i == 0 else f'Agent_Checkpoint_Epoch_{(i) * config.CHECKPOINT_INTERVAL}'
+        plt.plot(range(config.EVALUATION_INTERVAL, config.EVALUATION_INTERVAL + len(moves) * config.EVALUATION_INTERVAL, config.EVALUATION_INTERVAL), moves, label=label)
+    plt.xlabel('Epoch')
+    plt.ylabel('Moves')
+    plt.legend()
+    plt.title('Moves over Checkpoints')
+    plt.savefig(os.path.join(model_folder, 'wr_moves.png'))
+    plt.close()
 
 def save_config_to_file(config_module, filename="config.py"):
     with open(filename, 'w') as file:
         for name, value in inspect.getmembers(config_module):
             if not name.startswith("__") and not inspect.ismodule(value) and not inspect.isfunction(value):
                 file.write(f"{name} = {value}\n")
-
 
 def save_checkpoint(model, optimizer, epoch, model_folder, filename='checkpoint.pth.tar'):
     state = {
@@ -79,7 +97,6 @@ def save_checkpoint(model, optimizer, epoch, model_folder, filename='checkpoint.
     filepath = os.path.join(model_folder, filename)
     torch.save(state, filepath)
 
-
 def load_checkpoint(filepath, board_size):
     model = create_model(board_size)
     optimizer = optim.Adam(model.parameters())
@@ -87,7 +104,6 @@ def load_checkpoint(filepath, board_size):
     model.load_state_dict(checkpoint['state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer'])
     return model, optimizer
-
 
 def setup_device():
     if torch.cuda.is_available():

@@ -20,6 +20,18 @@ from random import choice
 # Suppress TensorFlow logs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
+# Liste zum Speichern des Logverlaufs
+log_history = []
+
+def log_message(message):
+    print(message)
+    log_history.append(message)
+
+def write_log_to_file(log_path, log_history):
+    with open(log_path, 'w') as log_file:
+        for entry in log_history:
+            log_file.write(entry + '\n')
+
 def play_game(mcts: MCTS, board_size: int, opponent='random'):
     game = engine.HexPosition(board_size)
     state_history = []
@@ -46,7 +58,7 @@ def play_games(model, board_size, num_games, opponent='random', epsilon=config.E
     total_cpus = os.cpu_count()
     if config.PARALLEL_GAMES:
         num_threads = min(total_cpus, config.NUM_PARALLEL_THREADS)
-        print(f"Using {num_threads} parallel threads out of {total_cpus} available")
+        log_message(f"Using {num_threads} parallel threads out of {total_cpus} available")
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         mp.set_start_method('spawn', force=True)
         with Pool(num_threads) as pool:
@@ -54,7 +66,7 @@ def play_games(model, board_size, num_games, opponent='random', epsilon=config.E
             results = list(tqdm(pool.imap(play_game_worker, args), total=num_games, unit='game'))
         return results
     else:
-        print(f"Parallel games disabled. Using a single thread out of {total_cpus} available")
+        log_message(f"Parallel games disabled. Using a single thread out of {total_cpus} available")
         results = []
         mcts = MCTS(model, epsilon=epsilon)
         for _ in tqdm(range(num_games), unit='game'):
@@ -142,7 +154,7 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
 
 def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_per_epoch=config.NUM_OF_GAMES_PER_EPOCH):
     device = setup_device()
-    print("Creating model...")
+    log_message("Creating model...")
     model = create_model(board_size).to(device)
     mcts = MCTS(model)
     best_loss = float('inf')
@@ -154,13 +166,13 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
 
     current_time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
     model_folder = os.path.join(models_folder, current_time)
-    os.makedirs(model_folder)
+    os.makedirs(model_folder, exist_ok=True)  # Sicherstellen, dass das Verzeichnis erstellt wird, falls es nicht existiert
 
     # Save a RandomAgent checkpoint
     random_agent_checkpoint_path = os.path.join(model_folder, 'random_agent_checkpoint.pth.tar')
     torch.save({'state_dict': None, 'optimizer': None}, random_agent_checkpoint_path)
 
-    print("Saving config to file...")
+    log_message("Saving config to file...")
     save_config_to_file(config, filename=os.path.join(model_folder, 'config.py'))
 
     losses = []
@@ -176,7 +188,7 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
     model.to(device)
 
     for epoch in range(1, epochs + 1):
-        print(f"Starting Epoch {epoch}/{epochs}")
+        log_message(f"Starting Epoch {epoch}/{epochs}")
         if epoch <= config.WARMUP_EPOCHS:
             lr = config.WARMUP_LEARNING_RATE + (config.LEARNING_RATE - config.WARMUP_LEARNING_RATE) * (epoch / config.WARMUP_EPOCHS)
             for param_group in optimizer.param_groups:
@@ -229,17 +241,17 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
         win_rates_checkpoint, avg_moves_checkpoint = [], []
         if epoch % config.EVALUATION_INTERVAL == 0 or epoch == epochs:
             checkpoints = [random_agent_checkpoint_path] + [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range(config.CHECKPOINT_INTERVAL, epoch + 1, config.CHECKPOINT_INTERVAL)]
-            print(f"Evaluating against checkpoints: {checkpoints}")
+            log_message(f"Evaluating against checkpoints: {checkpoints}")
             win_rates_checkpoint, avg_moves_checkpoint = validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder=model_folder, checkpoints=checkpoints)
             for i, (wr, am) in enumerate(zip(win_rates_checkpoint, avg_moves_checkpoint)):
                 win_rates[i].append(wr)
                 avg_moves[i].append(am)
 
         total_loss = policy_loss.item() + value_loss.item()
-        print(f"Completed Epoch {epoch}/{epochs} with Loss: {total_loss}, Policy Loss: {policy_loss.item()}, Value Loss: {value_loss.item()}")
-        print(f"Random_Agent: Win Rates: {win_rates[0][-1] if win_rates[0] else 'N/A'}, Avg. Moves: {avg_moves[0][-1] if avg_moves[0] else 'N/A'}")
+        log_message(f"Completed Epoch {epoch}/{epochs} with Loss: {total_loss}, Policy Loss: {policy_loss.item()}, Value Loss: {value_loss.item()}")
+        log_message(f"Random_Agent: Win Rates: {win_rates[0][-1] if win_rates[0] else 'N/A'}, Avg. Moves: {avg_moves[0][-1] if avg_moves[0] else 'N/A'}")
         for i in range(1, len(win_rates)):
-            print(f"Agent_Checkpoint_Epoch_{i * config.CHECKPOINT_INTERVAL}: Win Rates: {win_rates[i][-1] if win_rates[i] else 'N/A'}, Avg. Moves: {avg_moves[i][-1] if avg_moves[i] else 'N/A'}")
+            log_message(f"Agent_Checkpoint_Epoch_{i * config.CHECKPOINT_INTERVAL}: Win Rates: {win_rates[i][-1] if win_rates[i] else 'N/A'}, Avg. Moves: {avg_moves[i][-1] if avg_moves[i] else 'N/A'}")
 
         if loss.item() < best_loss:
             best_loss = loss.item()
@@ -249,14 +261,16 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
     if not os.path.exists(best_model_path):
         os.makedirs(best_model_path)
     torch.save(best_model_state, os.path.join(best_model_path, 'best_hex_model.pth'))
-    save_results(losses, win_rates, policy_losses, value_losses, best_model_path, avg_moves)
+    save_results(losses, win_rates, policy_losses, value_losses, best_model_path, avg_moves, checkpoints)
 
+    # Schreibe die gesammelten Log-Einträge in die Logdatei
+    write_log_to_file(os.path.join(model_folder, 'train.log'), log_history)
 
 if __name__ == "__main__":
-    print("CUDA available: ", torch.cuda.is_available())
+    log_message("CUDA available: " + str(torch.cuda.is_available()))
     if torch.cuda.is_available():
-        print("CUDA device name: ", torch.cuda.get_device_name(0))
+        log_message("CUDA device name: " + torch.cuda.get_device_name(0))
     else:
-        print("CUDA device not found. Please check your CUDA installation.")
+        log_message("CUDA device not found. Please check your CUDA installation.")
     mp.set_start_method('spawn')
     train_model()
