@@ -36,6 +36,6 @@ NUM_PARALLEL_THREADS = 24 # Number of parallel threads to use (adjust based on C
 
 
 
-MODEL = 'fhtw_hex/submission_konrad_lord_spreitzhofer/models/2024-06-08-02-52/best_loss/best_hex_model.pth'  # enter the folder to test
+MODEL = 'fhtw_hex/submission_konrad_lord_spreitzhofer/models/3x3_v1/best_loss/best_hex_model.pth'  # enter the folder to test
 
 
