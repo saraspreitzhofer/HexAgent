@@ -21,7 +21,7 @@ import random
 from fhtw_hex.submission_konrad_lord_spreitzhofer.utils import load_checkpoint, save_checkpoint, save_config_to_file, \
     save_results, setup_device
 
-
+#
 # Replay Buffer Klasse
 class ReplayBuffer:
     def __init__(self, capacity):
