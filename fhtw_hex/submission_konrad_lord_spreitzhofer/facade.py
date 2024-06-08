@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from copy import deepcopy
 from fhtw_hex import hex_engine as engine
 from fhtw_hex.submission_konrad_lord_spreitzhofer import config
-
+#
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
