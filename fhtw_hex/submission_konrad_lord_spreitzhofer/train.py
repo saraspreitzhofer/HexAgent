@@ -1,4 +1,5 @@
 import numpy as np
+import sys
 import os
 import copy
 import matplotlib.pyplot as plt
@@ -17,6 +18,7 @@ import torch.multiprocessing as mp
 from random import choice
 
 from fhtw_hex.submission_konrad_lord_spreitzhofer.utils import load_checkpoint, save_checkpoint, save_config_to_file, save_results, setup_device
+
 
 # Suppress TensorFlow logs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
