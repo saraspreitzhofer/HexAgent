@@ -186,6 +186,8 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
 
 
 
+
+
 def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_per_epoch=config.NUM_OF_GAMES_PER_EPOCH):
     device = setup_device()
     log_message("Creating model...")
@@ -315,6 +317,7 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
     log_path = os.path.join(model_folder, 'train.log')
     save_log_to_file(log_path)
     log_message(f"Logfile created at {log_path}")
+
 
 
 def save_results(losses, win_rates, policy_losses, value_losses, best_model_path, avg_moves, checkpoints):
