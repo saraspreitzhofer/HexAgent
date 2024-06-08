@@ -6,7 +6,7 @@ import config
 import inspect
 from facade import MCTS, create_model
 import torch.optim as optim
-#
+
 def save_results(losses, win_rates, policy_losses, value_losses, best_model_path, avg_moves, checkpoints):
     epochs = len(losses)
 
@@ -34,7 +34,7 @@ def save_results(losses, win_rates, policy_losses, value_losses, best_model_path
         else:
             start_epoch = config.CHECKPOINT_INTERVAL * i
             agent_epochs = list(range(start_epoch, epochs + 1, config.EVALUATION_INTERVAL))
-            legend_name = f'Checkpoint_{start_epoch}_Agent'
+            legend_name = f'Agent_Epoch_{start_epoch}'
 
         plt.figure()
         plt.plot(agent_epochs, agent_win_rates, label=f'{legend_name} Win Rate')
@@ -54,7 +54,7 @@ def save_results(losses, win_rates, policy_losses, value_losses, best_model_path
         plt.savefig(os.path.join(best_model_path, f'avg_moves_{i}.png'))
         plt.close()
 
-    # Combined plots for all agents
+    # Plotting combined win rates and moves
     plt.figure()
     for i in range(len(win_rates)):
         agent_win_rates = win_rates[i]
@@ -64,13 +64,13 @@ def save_results(losses, win_rates, policy_losses, value_losses, best_model_path
         else:
             start_epoch = config.CHECKPOINT_INTERVAL * i
             agent_epochs = list(range(start_epoch, epochs + 1, config.EVALUATION_INTERVAL))
-            label = f'Checkpoint_{start_epoch}_Agent'
+            label = f'Agent_Epoch_{start_epoch}'
         plt.plot(agent_epochs, agent_win_rates, label=label)
     plt.xlabel('Epoch')
     plt.ylabel('Win Rate')
     plt.legend()
-    plt.title('Win Rate over Checkpoints (All Agents)')
-    plt.savefig(os.path.join(best_model_path, 'combined_win_rates.png'))
+    plt.title('Win Rate over Checkpoints')
+    plt.savefig(os.path.join(best_model_path, 'win_rate_combined.png'))
     plt.close()
 
     plt.figure()
@@ -82,13 +82,13 @@ def save_results(losses, win_rates, policy_losses, value_losses, best_model_path
         else:
             start_epoch = config.CHECKPOINT_INTERVAL * i
             agent_epochs = list(range(start_epoch, epochs + 1, config.EVALUATION_INTERVAL))
-            label = f'Checkpoint_{start_epoch}_Agent'
+            label = f'Agent_Epoch_{start_epoch}'
         plt.plot(agent_epochs, agent_avg_moves, label=label)
     plt.xlabel('Epoch')
     plt.ylabel('Moves')
     plt.legend()
-    plt.title('Moves over Checkpoints (All Agents)')
-    plt.savefig(os.path.join(best_model_path, 'combined_avg_moves.png'))
+    plt.title('Moves over Checkpoints')
+    plt.savefig(os.path.join(best_model_path, 'avg_moves_combined.png'))
     plt.close()
 
 def save_config_to_file(config_module, filename="config.py"):

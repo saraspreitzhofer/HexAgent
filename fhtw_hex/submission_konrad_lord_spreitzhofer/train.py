@@ -285,6 +285,7 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
             checkpoints = [random_agent_checkpoint_path] + [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar')
                                                             for e in range(config.CHECKPOINT_INTERVAL, epoch + 1,
                                                                            config.CHECKPOINT_INTERVAL)]
+            checkpoints = checkpoints[:config.NUM_OF_AGENTS + 1]  # Limit the number of checkpoints to evaluate
             log_message(f"Evaluating against checkpoints: {checkpoints}")
             win_rates_checkpoint, avg_moves_checkpoint = validate_against_checkpoints(model, board_size,
                                                                                       num_games=config.NUM_OF_GAMES_PER_CHECKPOINT,
@@ -317,6 +318,7 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
     log_path = os.path.join(model_folder, 'train.log')
     save_log_to_file(log_path)
     log_message(f"Logfile created at {log_path}")
+
 
 
 
