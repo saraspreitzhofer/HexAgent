@@ -81,17 +81,21 @@ def play_validation(args):
             if starter == "current":
                 # Current agent (player1) macht den ersten Zug
                 chosen = player1.get_action(game.board, game.get_action_space())
+                first_choice = False
             else:
                 # Checkpoint agent (player2) macht den ersten Zug zufällig
                 chosen = choice(game.get_action_space())
                 game.moove(chosen)
                 first_choice = False
                 continue  # Aktueller Agent (player1) ist an der Reihe
-            first_choice = False
         elif game.player == 1:
             chosen = player1.get_action(game.board, game.get_action_space())
         else:
-            chosen = player2.get_action(game.board, game.get_action_space())
+            if first_choice:
+                chosen = choice(game.get_action_space())
+                first_choice = False
+            else:
+                chosen = player2.get_action(game.board, game.get_action_space())
         game.moove(chosen)
 
     move_count = len(game.history)
@@ -99,16 +103,15 @@ def play_validation(args):
     return result, move_count
 
 
-def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder='models',
-                                 checkpoints=[]):
+
+def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder='models', checkpoints=[]):
     model.eval()
     current_mcts = MCTS(model)
     win_rates = []
     move_rates = []
 
     with torch.no_grad():
-        for i, checkpoint in enumerate(tqdm(checkpoints[:config.NUM_OF_AGENTS + 1], desc='Checkpoints',
-                                            unit='checkpoint')):  # Including RandomAgent
+        for i, checkpoint in enumerate(tqdm(checkpoints[:config.NUM_OF_AGENTS + 1], desc='Checkpoints', unit='checkpoint')):  # Including RandomAgent
             if 'random_agent_checkpoint.pth.tar' in checkpoint:
                 checkpoint_mcts = RandomAgent()
             else:
@@ -139,6 +142,8 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
             move_rates.append(total_moves / num_games)
 
     return win_rates, move_rates
+
+
 
 def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_per_epoch=config.NUM_OF_GAMES_PER_EPOCH):
     device = setup_device()
@@ -250,6 +255,7 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
         os.makedirs(best_model_path)
     torch.save(best_model_state, os.path.join(best_model_path, 'best_hex_model.pth'))
     save_results(losses, win_rates, policy_losses, value_losses, best_model_path, avg_moves)
+
 
 if __name__ == "__main__":
     print("CUDA available: ", torch.cuda.is_available())
