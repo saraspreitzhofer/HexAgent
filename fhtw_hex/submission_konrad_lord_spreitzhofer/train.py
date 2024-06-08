@@ -108,7 +108,9 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
     move_rates = []
 
     with torch.no_grad():
-        for i, checkpoint in enumerate(tqdm(checkpoints[:config.NUM_OF_AGENTS + 1], desc='Checkpoints', unit='checkpoint')):  # Including RandomAgent
+        # Begrenze die Anzahl der Checkpoints auf config.NUM_OF_AGENTS + 1 (einschließlich RandomAgent)
+        checkpoints_to_evaluate = checkpoints[:config.NUM_OF_AGENTS + 1]
+        for i, checkpoint in enumerate(tqdm(checkpoints_to_evaluate, desc='Checkpoints', unit='checkpoint')):  # Including RandomAgent
             if 'random_agent_checkpoint.pth.tar' in checkpoint:
                 checkpoint_mcts = RandomAgent()
             else:
@@ -229,6 +231,8 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
         win_rates_checkpoint, avg_moves_checkpoint = [], []
         if epoch % config.EVALUATION_INTERVAL == 0 or epoch == epochs:
             checkpoints = [random_agent_checkpoint_path] + [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range(config.CHECKPOINT_INTERVAL, epoch + 1, config.CHECKPOINT_INTERVAL)]
+            # Begrenze die Anzahl der Checkpoints auf config.NUM_OF_AGENTS + 1 (einschließlich RandomAgent)
+            checkpoints = checkpoints[:config.NUM_OF_AGENTS + 1]
             print(f"Evaluating against checkpoints: {checkpoints}")
             win_rates_checkpoint, avg_moves_checkpoint = validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder=model_folder, checkpoints=checkpoints)
             for i, (wr, am) in enumerate(zip(win_rates_checkpoint, avg_moves_checkpoint)):
@@ -250,7 +254,6 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
         os.makedirs(best_model_path)
     torch.save(best_model_state, os.path.join(best_model_path, 'best_hex_model.pth'))
     save_results(losses, win_rates, policy_losses, value_losses, best_model_path, avg_moves)
-
 
 if __name__ == "__main__":
     print("CUDA available: ", torch.cuda.is_available())
