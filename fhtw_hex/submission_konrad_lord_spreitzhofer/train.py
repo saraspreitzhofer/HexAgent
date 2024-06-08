@@ -242,7 +242,7 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
 
         win_rates_checkpoint, avg_moves_checkpoint = [], []
         if epoch % config.EVALUATION_INTERVAL == 0 or epoch == epochs:
-            checkpoints = [random_agent_checkpoint_path] + [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range(config.CHECKPOINT_INTERVAL, epoch + 1, config.CHECKPOINT_INTERVAL)]
+            checkpoints = [random_agent_checkpoint_path] + [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range(config.CHECKPOINT_INTERVAL, epoch + 1, config.CHECKPOINT_INTERVAL)][:config.NUM_OF_AGENTS]
             log_message(f"Evaluating against checkpoints: {checkpoints}")
             win_rates_checkpoint, avg_moves_checkpoint = validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder=model_folder, checkpoints=checkpoints)
             for i, (wr, am) in enumerate(zip(win_rates_checkpoint, avg_moves_checkpoint)):
@@ -269,88 +269,6 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
     log_path = os.path.join(model_folder, 'train.log')
     save_log_to_file(log_path)
     log_message(f"Logfile created at {log_path}")
-
-def save_results(losses, win_rates, policy_losses, value_losses, best_model_path, avg_moves, checkpoints):
-    epochs = len(losses)
-
-    # Plotting loss
-    plt.figure()
-    plt.plot(range(epochs), losses, label="Total Loss")
-    plt.plot(range(epochs), policy_losses, label="Policy Loss")
-    plt.plot(range(epochs), value_losses, label="Value Loss")
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.title('Loss over Epochs')
-    plt.savefig(os.path.join(best_model_path, 'loss.png'))
-    plt.close()
-
-    # Plotting win rates and moves
-    for i in range(len(win_rates)):
-        agent_win_rates = win_rates[i]
-        agent_avg_moves = avg_moves[i]
-
-        # Calculate epochs for this agent
-        if i == 0:
-            agent_epochs = list(range(config.EVALUATION_INTERVAL, epochs + 1, config.EVALUATION_INTERVAL))
-        else:
-            start_epoch = config.CHECKPOINT_INTERVAL * i
-            agent_epochs = list(range(start_epoch, epochs + 1, config.EVALUATION_INTERVAL))
-
-        label = f'Random_Agent' if i == 0 else f'Agent_Checkpoint_Epoch_{start_epoch}'
-
-        plt.figure()
-        plt.plot(agent_epochs, agent_win_rates, label=f'{label} Win Rate')
-        plt.xlabel('Epoch')
-        plt.ylabel('Win Rate')
-        plt.legend()
-        plt.title('Win Rate over Checkpoints')
-        plt.savefig(os.path.join(best_model_path, f'win_rate_{i}.png'))
-        plt.close()
-
-        plt.figure()
-        plt.plot(agent_epochs, agent_avg_moves, label=f'{label} Avg. Moves')
-        plt.xlabel('Epoch')
-        plt.ylabel('Moves')
-        plt.legend()
-        plt.title('Moves over Checkpoints')
-        plt.savefig(os.path.join(best_model_path, f'avg_moves_{i}.png'))
-        plt.close()
-
-    # Plotting combined win rates and moves
-    plt.figure()
-    for i in range(len(win_rates)):
-        agent_win_rates = win_rates[i]
-        if i == 0:
-            agent_epochs = list(range(config.EVALUATION_INTERVAL, epochs + 1, config.EVALUATION_INTERVAL))
-        else:
-            start_epoch = config.CHECKPOINT_INTERVAL * i
-            agent_epochs = list(range(start_epoch, epochs + 1, config.EVALUATION_INTERVAL))
-        label = f'Random_Agent' if i == 0 else f'Agent_Checkpoint_Epoch_{start_epoch}'
-        plt.plot(agent_epochs, agent_win_rates, label=label)
-    plt.xlabel('Epoch')
-    plt.ylabel('Win Rate')
-    plt.legend()
-    plt.title('Win Rate over Checkpoints')
-    plt.savefig(os.path.join(best_model_path, 'win_rate_combined.png'))
-    plt.close()
-
-    plt.figure()
-    for i in range(len(avg_moves)):
-        agent_avg_moves = avg_moves[i]
-        if i == 0:
-            agent_epochs = list(range(config.EVALUATION_INTERVAL, epochs + 1, config.EVALUATION_INTERVAL))
-        else:
-            start_epoch = config.CHECKPOINT_INTERVAL * i
-            agent_epochs = list(range(start_epoch, epochs + 1, config.EVALUATION_INTERVAL))
-        label = f'Random_Agent' if i == 0 else f'Agent_Checkpoint_Epoch_{start_epoch}'
-        plt.plot(agent_epochs, agent_avg_moves, label=label)
-    plt.xlabel('Epoch')
-    plt.ylabel('Moves')
-    plt.legend()
-    plt.title('Moves over Checkpoints')
-    plt.savefig(os.path.join(best_model_path, 'avg_moves_combined.png'))
-    plt.close()
 
 if __name__ == "__main__":
     log_message("CUDA available: " + str(torch.cuda.is_available()))
