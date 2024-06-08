@@ -1,24 +1,21 @@
-import numpy as np
 import sys
 import os
 import copy
-import matplotlib.pyplot as plt
-from fhtw_hex import hex_engine as engine
-from facade import MCTS, create_model
-from tqdm import tqdm
 from datetime import datetime
+import numpy as np
+import matplotlib.pyplot as plt
+from tqdm import tqdm
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import config
-import inspect
 from torch.optim.lr_scheduler import StepLR
+import config
+from fhtw_hex import hex_engine as engine
+from facade import MCTS, create_model
+from utils import load_checkpoint, save_checkpoint, save_config_to_file, save_results, setup_device
 from multiprocessing import Pool
 import torch.multiprocessing as mp
 from random import choice
-
-from fhtw_hex.submission_konrad_lord_spreitzhofer.utils import load_checkpoint, save_checkpoint, save_config_to_file, save_results, setup_device
-
 
 # Suppress TensorFlow logs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -104,8 +101,6 @@ def play_validation(args):
     result = 1 if ((game.winner == 1 and starter == "current") or (game.winner == -1 and starter == "checkpoint")) else 0
     return result, move_count
 
-
-
 def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder='models', checkpoints=[]):
     model.eval()
     current_mcts = MCTS(model)
@@ -144,8 +139,6 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
             move_rates.append(total_moves / num_games)
 
     return win_rates, move_rates
-
-
 
 def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_per_epoch=config.NUM_OF_GAMES_PER_EPOCH):
     device = setup_device()

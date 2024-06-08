@@ -1,7 +1,7 @@
 BOARD_SIZE = 3
 
 #MCTS
-EPOCHS = 30
+EPOCHS = 10
 NUM_OF_GAMES_PER_EPOCH = 15
 MCTS_SIMULATIONS = 200
 TEMPERATURE = 1.0
@@ -23,10 +23,10 @@ RANDOM_EPOCHS = 5            # How many epochs do we start to train against rand
 
 #Evaluation
 
-EVALUATION_INTERVAL = 3            # In which epochs do we evaluate
-CHECKPOINT_INTERVAL = 6            # When to save an Agent as opponent
+EVALUATION_INTERVAL = 2           # In which epochs do we evaluate
+CHECKPOINT_INTERVAL = 2            # When to save an Agent as opponent
 NUM_OF_GAMES_PER_CHECKPOINT = 10    # How many games do we play to evaluate
-NUM_OF_AGENTS = 4                  # Number of agents to save (excluded Random Agent)
+NUM_OF_AGENTS = 2                  # Number of agents to save (excluded Random Agent)
 
 
 
@@ -35,7 +35,7 @@ NUM_PARALLEL_THREADS = 24 # Number of parallel threads to use (adjust based on C
                          # if number is higher than avaiable threads than max threads will be used
 
 
-# MODEL = 'fhtw_hex/submission_konrad_lord_spreitzhofer/models/final/best_hex_model.keras'  # for the final submission
+
 MODEL = 'fhtw_hex/submission_konrad_lord_spreitzhofer/models/2024-06-03-11-36-13/best_loss/best_hex_model.pth'  # enter the folder to test
 
 
