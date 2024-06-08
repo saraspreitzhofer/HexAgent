@@ -16,8 +16,26 @@ from torch.optim.lr_scheduler import StepLR
 from multiprocessing import Pool
 import torch.multiprocessing as mp
 from random import choice
+from collections import deque
+import random
+from fhtw_hex.submission_konrad_lord_spreitzhofer.utils import load_checkpoint, save_checkpoint, save_config_to_file, \
+    save_results, setup_device
 
-from fhtw_hex.submission_konrad_lord_spreitzhofer.utils import load_checkpoint, save_checkpoint, save_config_to_file, save_results, setup_device
+
+# Replay Buffer Klasse
+class ReplayBuffer:
+    def __init__(self, capacity):
+        self.buffer = deque(maxlen=capacity)
+
+    def add(self, experience):
+        self.buffer.append(experience)
+
+    def sample(self, batch_size):
+        return random.sample(self.buffer, batch_size)
+
+    def __len__(self):
+        return len(self.buffer)
+
 
 # Suppress TensorFlow logs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -25,14 +43,17 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 # Collect logs during training
 log_buffer = []
 
+
 def log_message(message):
     print(message)
     log_buffer.append(message)
+
 
 def save_log_to_file(log_path):
     with open(log_path, 'w') as f:
         for message in log_buffer:
             f.write(message + '\n')
+
 
 def play_game(mcts: MCTS, board_size: int, opponent='random'):
     game = engine.HexPosition(board_size)
@@ -43,10 +64,12 @@ def play_game(mcts: MCTS, board_size: int, opponent='random'):
         if game.player == 1:
             chosen = mcts.get_action(game.board, game.get_action_space())
         else:
-            chosen = choice(game.get_action_space()) if opponent == 'random' else mcts.get_action(game.board, game.get_action_space())
+            chosen = choice(game.get_action_space()) if opponent == 'random' else mcts.get_action(game.board,
+                                                                                                  game.get_action_space())
         game.moove(chosen)
 
     return state_history, game.winner
+
 
 def play_game_worker(args):
     model_state_dict, board_size, opponent, device, epsilon = args
@@ -54,6 +77,7 @@ def play_game_worker(args):
     model.load_state_dict(model_state_dict)
     mcts = MCTS(model, epsilon=epsilon)
     return play_game(mcts, board_size, opponent)
+
 
 def play_games(model, board_size, num_games, opponent='random', epsilon=config.EPSILON_START):
     model_state_dict = model.state_dict()
@@ -75,9 +99,11 @@ def play_games(model, board_size, num_games, opponent='random', epsilon=config.E
             results.append(play_game(mcts, board_size, opponent))
         return results
 
+
 class RandomAgent:
     def get_action(self, board, action_space):
         return choice(action_space)
+
 
 def play_validation(args):
     board_size, current_mcts, checkpoint_mcts, random_agent = args
@@ -112,17 +138,21 @@ def play_validation(args):
         game.moove(chosen)
 
     move_count = len(game.history)
-    result = 1 if ((game.winner == 1 and starter == "current") or (game.winner == -1 and starter == "checkpoint")) else 0
+    result = 1 if (
+                (game.winner == 1 and starter == "current") or (game.winner == -1 and starter == "checkpoint")) else 0
     return result, move_count
 
-def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder='models', checkpoints=[]):
+
+def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder='models',
+                                 checkpoints=[]):
     model.eval()
     current_mcts = MCTS(model)
     win_rates = []
     move_rates = []
 
     with torch.no_grad():
-        for i, checkpoint in enumerate(tqdm(checkpoints[:config.NUM_OF_AGENTS + 1], desc='Checkpoints', unit='checkpoint')):  # Including RandomAgent
+        for i, checkpoint in enumerate(tqdm(checkpoints[:config.NUM_OF_AGENTS + 1], desc='Checkpoints',
+                                            unit='checkpoint')):  # Including RandomAgent
             if 'random_agent_checkpoint.pth.tar' in checkpoint:
                 checkpoint_mcts = RandomAgent()
             else:
@@ -153,6 +183,7 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
             move_rates.append(total_moves / num_games)
 
     return win_rates, move_rates
+
 
 def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_per_epoch=config.NUM_OF_GAMES_PER_EPOCH):
     device = setup_device()
@@ -189,10 +220,13 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
     scheduler = StepLR(optimizer, config.STEP_SIZE, gamma=config.GAMMA)
     model.to(device)
 
+    replay_buffer = ReplayBuffer(capacity=10000)
+
     for epoch in range(1, epochs + 1):
         log_message(f"Starting Epoch {epoch}/{epochs}")
         if epoch <= config.WARMUP_EPOCHS:
-            lr = config.WARMUP_LEARNING_RATE + (config.LEARNING_RATE - config.WARMUP_LEARNING_RATE) * (epoch / config.WARMUP_EPOCHS)
+            lr = config.WARMUP_LEARNING_RATE + (config.LEARNING_RATE - config.WARMUP_LEARNING_RATE) * (
+                        epoch / config.WARMUP_EPOCHS)
             for param_group in optimizer.param_groups:
                 param_group['lr'] = lr
         elif epoch == config.WARMUP_EPOCHS + 1:
@@ -200,17 +234,19 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
                 param_group['lr'] = config.LEARNING_RATE
 
         epsilon = config.EPSILON_END + (config.EPSILON_START - config.EPSILON_END) * (1 - epoch / epochs)
-        results = play_games(model, board_size, num_games_per_epoch, opponent='self', epsilon=epsilon)
-
-        states, policies, values = [], [], []
-        wins = 0
+        results = play_games(model, board_size, num_games_per_epoch,
+                             opponent='self' if epoch > config.RANDOM_EPOCHS else 'random', epsilon=epsilon)
 
         for state_history, result in results:
-            wins += 1 if result == 1 else 0
             for state in state_history:
-                states.append(state)
-                policies.append(np.random.dirichlet(np.ones(board_size * board_size)))
-                values.append(result)
+                policies = np.random.dirichlet(np.ones(board_size * board_size))
+                replay_buffer.add((state, policies, result))
+
+        if len(replay_buffer) < config.BATCH_SIZE:
+            log_message("Not enough samples in replay buffer. Skipping training.")
+            continue
+
+        states, policies, values = zip(*replay_buffer.sample(config.BATCH_SIZE))
 
         states = np.array(states).reshape((-1, 1, board_size, board_size))
         policies = np.array(policies)
@@ -238,22 +274,31 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
 
         if epoch == 1 or epoch % config.CHECKPOINT_INTERVAL == 0:
             checkpoint_epoch = epoch
-            save_checkpoint(model, optimizer, checkpoint_epoch, model_folder, filename=f'checkpoint_epoch_{checkpoint_epoch}.pth.tar')
+            save_checkpoint(model, optimizer, checkpoint_epoch, model_folder,
+                            filename=f'checkpoint_epoch_{checkpoint_epoch}.pth.tar')
 
         win_rates_checkpoint, avg_moves_checkpoint = [], []
         if epoch % config.EVALUATION_INTERVAL == 0 or epoch == epochs:
-            checkpoints = [random_agent_checkpoint_path] + [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range(config.CHECKPOINT_INTERVAL, epoch + 1, config.CHECKPOINT_INTERVAL)][:config.NUM_OF_AGENTS]
+            checkpoints = [random_agent_checkpoint_path] + [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar')
+                                                            for e in range(config.CHECKPOINT_INTERVAL, epoch + 1,
+                                                                           config.CHECKPOINT_INTERVAL)]
             log_message(f"Evaluating against checkpoints: {checkpoints}")
-            win_rates_checkpoint, avg_moves_checkpoint = validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder=model_folder, checkpoints=checkpoints)
+            win_rates_checkpoint, avg_moves_checkpoint = validate_against_checkpoints(model, board_size,
+                                                                                      num_games=config.NUM_OF_GAMES_PER_CHECKPOINT,
+                                                                                      model_folder=model_folder,
+                                                                                      checkpoints=checkpoints)
             for i, (wr, am) in enumerate(zip(win_rates_checkpoint, avg_moves_checkpoint)):
                 win_rates[i].append(wr)
                 avg_moves[i].append(am)
 
         total_loss = policy_loss.item() + value_loss.item()
-        log_message(f"Completed Epoch {epoch}/{epochs} with Loss: {total_loss}, Policy Loss: {policy_loss.item()}, Value Loss: {value_loss.item()}")
-        log_message(f"Random_Agent: Win Rates: {win_rates[0][-1] if win_rates[0] else 'N/A'}, Avg. Moves: {avg_moves[0][-1] if avg_moves[0] else 'N/A'}")
+        log_message(
+            f"Completed Epoch {epoch}/{epochs} with Loss: {total_loss}, Policy Loss: {policy_loss.item()}, Value Loss: {value_loss.item()}")
+        log_message(
+            f"Random_Agent: Win Rates: {win_rates[0][-1] if win_rates[0] else 'N/A'}, Avg. Moves: {avg_moves[0][-1] if avg_moves[0] else 'N/A'}")
         for i in range(1, len(win_rates)):
-            log_message(f"Agent_Checkpoint_Epoch_{i * config.CHECKPOINT_INTERVAL}: Win Rates: {win_rates[i][-1] if win_rates[i] else 'N/A'}, Avg. Moves: {avg_moves[i][-1] if avg_moves[i] else 'N/A'}")
+            log_message(
+                f"Agent_Checkpoint_Epoch_{i * config.CHECKPOINT_INTERVAL}: Win Rates: {win_rates[i][-1] if win_rates[i] else 'N/A'}, Avg. Moves: {avg_moves[i][-1] if avg_moves[i] else 'N/A'}")
 
         if loss.item() < best_loss:
             best_loss = loss.item()
@@ -269,6 +314,53 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
     log_path = os.path.join(model_folder, 'train.log')
     save_log_to_file(log_path)
     log_message(f"Logfile created at {log_path}")
+
+
+def save_results(losses, win_rates, policy_losses, value_losses, best_model_path, avg_moves, checkpoints):
+    epochs = len(losses)
+
+    # Plotting loss
+    plt.figure()
+    plt.plot(range(epochs), losses, label="Total Loss")
+    plt.plot(range(epochs), policy_losses, label="Policy Loss")
+    plt.plot(range(epochs), value_losses, label="Value Loss")
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.title('Loss over Epochs')
+    plt.savefig(os.path.join(best_model_path, 'loss.png'))
+    plt.close()
+
+    # Plotting win rates and moves
+    for i in range(len(win_rates)):
+        agent_win_rates = win_rates[i]
+        agent_avg_moves = avg_moves[i]
+
+        # Calculate epochs for this agent
+        if i == 0:
+            agent_epochs = list(range(config.EVALUATION_INTERVAL, epochs + 1, config.EVALUATION_INTERVAL))
+        else:
+            start_epoch = config.CHECKPOINT_INTERVAL * i
+            agent_epochs = list(range(start_epoch, epochs + 1, config.EVALUATION_INTERVAL))
+
+        plt.figure()
+        plt.plot(agent_epochs, agent_win_rates, label=f'{checkpoints[i]} Win Rate')
+        plt.xlabel('Epoch')
+        plt.ylabel('Win Rate')
+        plt.legend()
+        plt.title('Win Rate over Checkpoints')
+        plt.savefig(os.path.join(best_model_path, f'win_rate_{i}.png'))
+        plt.close()
+
+        plt.figure()
+        plt.plot(agent_epochs, agent_avg_moves, label=f'{checkpoints[i]} Avg. Moves')
+        plt.xlabel('Epoch')
+        plt.ylabel('Moves')
+        plt.legend()
+        plt.title('Moves over Checkpoints')
+        plt.savefig(os.path.join(best_model_path, f'avg_moves_{i}.png'))
+        plt.close()
+
 
 if __name__ == "__main__":
     log_message("CUDA available: " + str(torch.cuda.is_available()))
