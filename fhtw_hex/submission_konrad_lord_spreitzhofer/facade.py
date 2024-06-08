@@ -88,20 +88,18 @@ class HexNet(nn.Module):
         self.board_size = board_size
         self.conv1 = nn.Conv2d(1, 64, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(64)
-
-        self.residual_blocks = nn.ModuleList([ResidualBlock(64) for _ in range(3)]) #Anzahl der Blöce
-
+        self.residual_blocks = nn.ModuleList([ResidualBlock(64) for _ in range(3)]) #Anzahl der Blöcke
         self.flatten = nn.Flatten()
+        self.dropout = nn.Dropout(p=0.3)  # Dropout-Schicht mit einer Dropout-Rate von 30%
         self.policy_head = nn.Linear(64 * board_size * board_size, board_size * board_size)
         self.value_head = nn.Linear(64 * board_size * board_size, 1)
 
     def forward(self, x):
         x = F.relu(self.bn1(self.conv1(x)))
-
         for block in self.residual_blocks:
             x = block(x)
-
         x = self.flatten(x)
+        x = self.dropout(x)  # Dropout-Schicht anwenden
         policy = F.log_softmax(self.policy_head(x), dim=1)
         value = torch.tanh(self.value_head(x))
         return policy, value
@@ -124,10 +122,8 @@ class MCTS:
         root = Node(state, action_set)
         for _ in range(self.simulations):
             self.search(root)
-
         if np.random.rand() < self.epsilon:
             return np.random.choice(root.children).action
-
         return max(root.children, key=lambda c: c.visit_count).action
 
     def search(self, node, exploration_weight=1.0):
@@ -148,11 +144,8 @@ class MCTS:
         self.model.eval()
         with torch.no_grad():
             policy, value = self.model(board)
-
-        # Apply temperature to policy
         policy = np.exp(policy.cpu().numpy()[0] / config.TEMPERATURE)
-        policy = policy / np.sum(policy)  # Normalize
-
+        policy = policy / np.sum(policy)
         return policy, value.cpu().numpy()[0][0]
 
 

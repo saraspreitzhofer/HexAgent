@@ -30,14 +30,14 @@ def save_results(losses, win_rates, policy_losses, value_losses, best_model_path
         # Calculate epochs for this agent
         if i == 0:
             agent_epochs = list(range(config.EVALUATION_INTERVAL, epochs + 1, config.EVALUATION_INTERVAL))
+            legend_name = 'Random_Agent'
         else:
             start_epoch = config.CHECKPOINT_INTERVAL * i
             agent_epochs = list(range(start_epoch, epochs + 1, config.EVALUATION_INTERVAL))
-
-        label = f'Random_Agent' if i == 0 else f'Agent_Checkpoint_Epoch_{start_epoch}'
+            legend_name = f'checkpoint_epoch_{start_epoch}_Agent'
 
         plt.figure()
-        plt.plot(agent_epochs, agent_win_rates, label=f'{label} Win Rate')
+        plt.plot(agent_epochs, agent_win_rates, label=f'{legend_name} Win Rate')
         plt.xlabel('Epoch')
         plt.ylabel('Win Rate')
         plt.legend()
@@ -46,13 +46,14 @@ def save_results(losses, win_rates, policy_losses, value_losses, best_model_path
         plt.close()
 
         plt.figure()
-        plt.plot(agent_epochs, agent_avg_moves, label=f'{label} Avg. Moves')
+        plt.plot(agent_epochs, agent_avg_moves, label=f'{legend_name} Avg. Moves')
         plt.xlabel('Epoch')
         plt.ylabel('Moves')
         plt.legend()
         plt.title('Moves over Checkpoints')
         plt.savefig(os.path.join(best_model_path, f'avg_moves_{i}.png'))
         plt.close()
+
 
     # Plotting combined win rates and moves
     plt.figure()
