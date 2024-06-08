@@ -1,4 +1,3 @@
-import sys
 import os
 import copy
 from datetime import datetime
@@ -160,7 +159,8 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
 
     # Save a RandomAgent checkpoint
     random_agent_checkpoint_path = os.path.join(model_folder, 'random_agent_checkpoint.pth.tar')
-    torch.save({'state_dict': None, 'optimizer': None}, random_agent_checkpoint_path)
+    if not os.path.exists(random_agent_checkpoint_path):
+        torch.save({'state_dict': None, 'optimizer': None}, random_agent_checkpoint_path)
 
     print("Saving config to file...")
     save_config_to_file(config, filename=os.path.join(model_folder, 'config.py'))
