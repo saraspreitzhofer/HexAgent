@@ -267,9 +267,11 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
     win_rates = []
     move_rates = []
 
+    # Begrenze die Checkpoints-Liste auf die gewünschte Anzahl von Agenten plus den Random-Agenten
+    checkpoints = checkpoints[:config.NUM_OF_AGENTS + 1]
+
     with torch.no_grad():
-        for i, checkpoint in enumerate(tqdm(checkpoints[:config.NUM_OF_AGENTS + 1], desc='Checkpoints',
-                                            unit='checkpoint')):  # Including RandomAgent
+        for i, checkpoint in enumerate(tqdm(checkpoints, desc='Checkpoints', unit='checkpoint')):  # Including RandomAgent
             if 'random_agent_checkpoint.pth.tar' in checkpoint:
                 checkpoint_mcts = RandomAgent()
             else:
@@ -342,7 +344,7 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
         log_message(f"Starting Epoch {epoch}/{epochs}")
         if epoch <= config.WARMUP_EPOCHS:
             lr = config.WARMUP_LEARNING_RATE + (config.LEARNING_RATE - config.WARMUP_LEARNING_RATE) * (
-                        epoch / config.WARMUP_EPOCHS)
+                    epoch / config.WARMUP_EPOCHS)
             for param_group in optimizer.param_groups:
                 param_group['lr'] = lr
         elif epoch == config.WARMUP_EPOCHS + 1:
@@ -397,7 +399,8 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
         if epoch % config.EVALUATION_INTERVAL == 0 or epoch == epochs:
             checkpoints = [random_agent_checkpoint_path] + [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar')
                                                             for e in range(config.CHECKPOINT_INTERVAL, epoch + 1,
-                                                                           config.CHECKPOINT_INTERVAL)][:config.NUM_OF_AGENTS + 1]
+                                                                           config.CHECKPOINT_INTERVAL)]
+            checkpoints = checkpoints[:config.NUM_OF_AGENTS + 1]  # Sicherstellen, dass die Liste korrekt begrenzt ist
             log_message(f"Evaluating against checkpoints: {checkpoints}")
             win_rates_checkpoint, avg_moves_checkpoint = validate_against_checkpoints(model, board_size,
                                                                                       num_games=config.NUM_OF_GAMES_PER_CHECKPOINT,
