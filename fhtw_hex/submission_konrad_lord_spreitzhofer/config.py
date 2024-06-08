@@ -1,7 +1,7 @@
 BOARD_SIZE = 3
 
 #MCTS
-EPOCHS = 20
+EPOCHS = 10
 NUM_OF_GAMES_PER_EPOCH = 15
 MCTS_SIMULATIONS = 200
 TEMPERATURE = 1.0
@@ -26,7 +26,7 @@ RANDOM_EPOCHS = 5            # How many epochs do we start to train against rand
 EVALUATION_INTERVAL = 2           # In which epochs do we evaluate
 CHECKPOINT_INTERVAL = 2            # When to save an Agent as opponent
 NUM_OF_GAMES_PER_CHECKPOINT = 10    # How many games do we play to evaluate
-NUM_OF_AGENTS = 3                  # Number of agents to save (excluded Random Agent)
+NUM_OF_AGENTS = 2                  # Number of agents to save (excluded Random Agent)
 
 
 
