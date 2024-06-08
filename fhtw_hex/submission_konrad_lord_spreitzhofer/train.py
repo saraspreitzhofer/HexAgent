@@ -232,25 +232,19 @@ def play_validation(args):
         checkpoint_mcts = RandomAgent()
     player1, player2 = (current_mcts, checkpoint_mcts) if starter == "current" else (checkpoint_mcts, current_mcts)
 
-    first_choice = True
+    first_move_done_by_player2 = False  # Flag, um zu verfolgen, ob player2 seinen ersten Zug gemacht hat
+
     while game.winner == 0:
-        if first_choice:
-            if starter == "current":
-                # Current agent (player1) macht den ersten Zug
-                chosen = player1.get_action(game.board, game.get_action_space())
-                first_choice = False
+        if game.player == 1:  # Spieler 1
+            if player1 == checkpoint_mcts and not first_move_done_by_player2:  # Zufälliger erster Zug für Checkpoint-Agent
+                chosen = choice(game.get_action_space())
+                first_move_done_by_player2 = True
             else:
-                # Checkpoint agent (player2) macht den ersten Zug zufällig
+                chosen = player1.get_action(game.board, game.get_action_space())
+        else:  # Spieler 2
+            if player2 == checkpoint_mcts and not first_move_done_by_player2:  # Zufälliger erster Zug für Checkpoint-Agent
                 chosen = choice(game.get_action_space())
-                game.moove(chosen)
-                first_choice = False
-                continue  # Aktueller Agent (player1) ist an der Reihe
-        elif game.player == 1:
-            chosen = player1.get_action(game.board, game.get_action_space())
-        else:
-            if first_choice:
-                chosen = choice(game.get_action_space())
-                first_choice = False
+                first_move_done_by_player2 = True
             else:
                 chosen = player2.get_action(game.board, game.get_action_space())
         game.moove(chosen)
@@ -259,6 +253,7 @@ def play_validation(args):
     result = 1 if (
             (game.winner == 1 and starter == "current") or (game.winner == -1 and starter == "checkpoint")) else 0
     return result, move_count
+
 
 def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder='models',
                                  checkpoints=[]):
