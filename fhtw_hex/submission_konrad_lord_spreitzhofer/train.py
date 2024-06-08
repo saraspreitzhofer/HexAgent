@@ -151,8 +151,8 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
     move_rates = []
 
     with torch.no_grad():
-        for i, checkpoint in enumerate(tqdm(checkpoints[:config.NUM_OF_AGENTS + 1], desc='Checkpoints',
-                                            unit='checkpoint')):  # Including RandomAgent
+        checkpoints_to_evaluate = checkpoints[:config.NUM_OF_AGENTS + 1]  # Only evaluate the desired number of checkpoints
+        for i, checkpoint in enumerate(tqdm(checkpoints_to_evaluate, desc='Checkpoints', unit='checkpoint')):
             if 'random_agent_checkpoint.pth.tar' in checkpoint:
                 checkpoint_mcts = RandomAgent()
             else:
@@ -183,6 +183,7 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
             move_rates.append(total_moves / num_games)
 
     return win_rates, move_rates
+
 
 
 def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_per_epoch=config.NUM_OF_GAMES_PER_EPOCH):

@@ -1,9 +1,9 @@
 BOARD_SIZE = 3
 
 #MCTS
-EPOCHS = 60
+EPOCHS = 20
 NUM_OF_GAMES_PER_EPOCH = 30
-MCTS_SIMULATIONS = 300
+MCTS_SIMULATIONS = 10
 TEMPERATURE = 1.0
 EPSILON_START = 0.4  # Startvalue for epsilon-greedy strategie
 EPSILON_END = 0.1    # Endvalue  for epsilon-greedy strategie
@@ -23,10 +23,10 @@ RANDOM_EPOCHS = 7            # How many epochs do we start to train against rand
 
 #Evaluation
 
-EVALUATION_INTERVAL = 4           # In which epochs do we evaluate
-CHECKPOINT_INTERVAL = 8            # When to save an Agent as opponent
+EVALUATION_INTERVAL = 5           # In which epochs do we evaluate
+CHECKPOINT_INTERVAL = 5            # When to save an Agent as opponent
 NUM_OF_GAMES_PER_CHECKPOINT = 10    # How many games do we play to evaluate
-NUM_OF_AGENTS = 4                  # Number of agents to save (excluded Random Agent)
+NUM_OF_AGENTS = 2                  # Number of agents to save (excluded Random Agent)
 
 
 
