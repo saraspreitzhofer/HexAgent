@@ -2,23 +2,21 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
-import matplotlib.pyplot as plt
-import os
-from tqdm import tqdm
-from datetime import datetime
 from torch.optim.lr_scheduler import StepLR
-from multiprocessing import Pool
-import torch.multiprocessing as mp
-from random import choice
+import torch.nn.functional as F
 from copy import deepcopy
-import random
 from fhtw_hex import hex_engine as engine
 from fhtw_hex.submission_konrad_lord_spreitzhofer import config as base_config
 from fhtw_hex.submission_konrad_lord_spreitzhofer.facade import create_model, MCTS, RandomAgent, ReplayBuffer, log_message, save_log_to_file
 from fhtw_hex.submission_konrad_lord_spreitzhofer.utils import load_checkpoint, save_checkpoint, save_config_to_file, save_results, setup_device
+import os
+from datetime import datetime
+from tqdm import tqdm
+from multiprocessing import Pool
+import torch.multiprocessing as mp
+from random import choice
 
-# Convert config module to a dictionary (this should enable to train on cluster parallel)
+# Convert config module to a dictionary(this should enable to train on cluster parallel)
 base_config_dict = {key: getattr(base_config, key) for key in dir(base_config) if not key.startswith("__")}
 config = deepcopy(base_config_dict)
 
@@ -253,7 +251,7 @@ def train_model():
     if not os.path.exists(best_model_path):
         os.makedirs(best_model_path)
     torch.save(best_model_state, os.path.join(best_model_path, 'best_hex_model.pth'))
-    save_results(local_config, losses, win_rates, policy_losses, value_losses, best_model_path, avg_moves, checkpoints)
+    save_results(losses, win_rates, policy_losses, value_losses, best_model_path, avg_moves, checkpoints, local_config)
 
     log_path = os.path.join(model_folder, 'train.log')
     save_log_to_file(log_path)
