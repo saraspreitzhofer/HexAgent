@@ -3,12 +3,13 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+from collections import deque
+import random
 from copy import deepcopy
 from fhtw_hex import hex_engine as engine
 from fhtw_hex.submission_konrad_lord_spreitzhofer import config
 #
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 
 class Node:
     hex_position_class = engine.HexPosition
@@ -64,7 +65,6 @@ class Node:
             np.log(self.parent.visit_count + 1) / (self.visit_count + epsilon))
         return exploitation + exploration
 
-
 class ResidualBlock(nn.Module):
     def __init__(self, channels):
         super(ResidualBlock, self).__init__()
@@ -80,7 +80,6 @@ class ResidualBlock(nn.Module):
         out += residual
         out = F.relu(out)
         return out
-
 
 class HexNet(nn.Module):
     def __init__(self, board_size):
@@ -104,18 +103,17 @@ class HexNet(nn.Module):
         value = torch.tanh(self.value_head(x))
         return policy, value
 
-
 def create_model(board_size):
     model = HexNet(board_size).to(device)
     return model
 
-
 class MCTS:
-    def __init__(self, model, simulations=config.MCTS_SIMULATIONS, device=device, epsilon=config.EPSILON_START):
+    def __init__(self, model, simulations=config.MCTS_SIMULATIONS, device=device, epsilon=config.EPSILON_START, board_size=config.BOARD_SIZE):
         self.model = model
         self.simulations = simulations
         self.device = device
         self.epsilon = epsilon
+        self.board_size = board_size
         self.model.to(self.device)
 
     def get_action(self, state, action_set):
@@ -139,7 +137,7 @@ class MCTS:
         return -value
 
     def evaluate(self, node):
-        board = np.array(node.state).reshape((1, 1, config.BOARD_SIZE, config.BOARD_SIZE)).astype(np.float32)
+        board = np.array(node.state).reshape((1, 1, self.board_size, self.board_size)).astype(np.float32)
         board = torch.tensor(board, device=self.device)
         self.model.eval()
         with torch.no_grad():
@@ -148,6 +146,33 @@ class MCTS:
         policy = policy / np.sum(policy)
         return policy, value.cpu().numpy()[0][0]
 
+class ReplayBuffer:
+    def __init__(self, capacity):
+        self.buffer = deque(maxlen=capacity)
+
+    def add(self, experience):
+        self.buffer.append(experience)
+
+    def sample(self, batch_size):
+        return random.sample(self.buffer, batch_size)
+
+    def __len__(self):
+        return len(self.buffer)
+
+class RandomAgent:
+    def get_action(self, board, action_space):
+        return random.choice(action_space)
+
+def log_message(message):
+    print(message)
+    log_buffer.append(message)
+
+log_buffer = []
+
+def save_log_to_file(log_path):
+    with open(log_path, 'w') as f:
+        for message in log_buffer:
+            f.write(message + '\n')
 
 def agent(board, action_set):
     board_size = config.BOARD_SIZE
