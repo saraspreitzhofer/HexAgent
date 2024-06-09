@@ -23,7 +23,7 @@ RANDOM_EPOCHS = 15            # How many epochs do we start to train against ran
 
 #Evaluation
 
-EVALUATION_INTERVAL = 3           # In which epochs do we evaluate
+EVALUATION_INTERVAL = 4          # In which epochs do we evaluate
 CHECKPOINT_INTERVAL = 6            # When to save an Agent as opponent
 NUM_OF_GAMES_PER_CHECKPOINT = 15    # How many games do we play to evaluate
 NUM_OF_AGENTS = 2                  # Number of agents to save (excluded Random Agent)
