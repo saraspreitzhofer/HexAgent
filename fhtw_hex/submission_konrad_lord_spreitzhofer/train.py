@@ -18,7 +18,7 @@ from fhtw_hex.submission_konrad_lord_spreitzhofer import config as base_config
 from fhtw_hex.submission_konrad_lord_spreitzhofer.facade import create_model, MCTS, RandomAgent, ReplayBuffer, log_message, save_log_to_file
 from fhtw_hex.submission_konrad_lord_spreitzhofer.utils import load_checkpoint, save_checkpoint, save_config_to_file, save_results, setup_device
 
-# Convert config module to a dictionary(this should enable to train on cluster parallel)
+# Convert config module to a dictionary (this should enable to train on cluster parallel)
 base_config_dict = {key: getattr(base_config, key) for key in dir(base_config) if not key.startswith("__")}
 config = deepcopy(base_config_dict)
 
@@ -64,7 +64,7 @@ def play_games(model, board_size, num_games, opponent='random', epsilon=0.1):
 def play_validation(args):
     board_size, current_mcts, checkpoint_mcts, random_agent = args
     game = engine.HexPosition(board_size)
-    starter = choice(["current", "checkpoint"])
+    starter = choice(["current", "checkpoint"])  # Zufällige Auswahl des Startspielers
 
     if random_agent:
         checkpoint_mcts = RandomAgent()
@@ -253,7 +253,7 @@ def train_model():
     if not os.path.exists(best_model_path):
         os.makedirs(best_model_path)
     torch.save(best_model_state, os.path.join(best_model_path, 'best_hex_model.pth'))
-    save_results(losses, win_rates, policy_losses, value_losses, best_model_path, avg_moves, checkpoints)
+    save_results(local_config, losses, win_rates, policy_losses, value_losses, best_model_path, avg_moves, checkpoints)
 
     log_path = os.path.join(model_folder, 'train.log')
     save_log_to_file(log_path)
