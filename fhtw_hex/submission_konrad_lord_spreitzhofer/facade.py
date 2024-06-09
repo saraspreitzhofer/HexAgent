@@ -90,7 +90,7 @@ class HexNet(nn.Module):
         self.bn1 = nn.BatchNorm2d(64)
         self.residual_blocks = nn.ModuleList([ResidualBlock(64) for _ in range(3)]) #Anzahl der Blöcke
         self.flatten = nn.Flatten()
-        self.dropout = nn.Dropout(p=0.3)  # Dropout-Schicht mit einer Dropout-Rate von 30%
+        self.dropout = nn.Dropout(p=0.2)  # Dropout-Schicht mit einer Dropout-Rate von 30%
         self.policy_head = nn.Linear(64 * board_size * board_size, board_size * board_size)
         self.value_head = nn.Linear(64 * board_size * board_size, 1)
 

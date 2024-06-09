@@ -15,8 +15,12 @@ from random import choice
 from collections import deque
 import random
 from fhtw_hex import hex_engine as engine
-from fhtw_hex.submission_konrad_lord_spreitzhofer import config
+from fhtw_hex.submission_konrad_lord_spreitzhofer import config as base_config
 from fhtw_hex.submission_konrad_lord_spreitzhofer.utils import load_checkpoint, save_checkpoint, save_config_to_file, save_results, setup_device
+
+# Convert config module to a dictionary(this should enable to train on cluster parallel)
+base_config_dict = {key: getattr(base_config, key) for key in dir(base_config) if not key.startswith("__")}
+config = deepcopy(base_config_dict)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -98,7 +102,7 @@ class HexNet(nn.Module):
         self.bn1 = nn.BatchNorm2d(64)
         self.residual_blocks = nn.ModuleList([ResidualBlock(64) for _ in range(3)]) #Anzahl der Blöcke
         self.flatten = nn.Flatten()
-        self.dropout = nn.Dropout(p=0.3)  # Dropout-Schicht mit einer Dropout-Rate von 30%
+        self.dropout = nn.Dropout(p=0.1)  # Dropout-Schicht mit einer Dropout-Rate von 30%
         self.policy_head = nn.Linear(64 * board_size * board_size, board_size * board_size)
         self.value_head = nn.Linear(64 * board_size * board_size, 1)
 
@@ -117,11 +121,12 @@ def create_model(board_size):
     return model
 
 class MCTS:
-    def __init__(self, model, simulations=config.MCTS_SIMULATIONS, device=device, epsilon=config.EPSILON_START):
+    def __init__(self, model, simulations=100, device=device, epsilon=0.1, board_size=5):
         self.model = model
         self.simulations = simulations
         self.device = device
         self.epsilon = epsilon
+        self.board_size = board_size
         self.model.to(self.device)
 
     def get_action(self, state, action_set):
@@ -145,12 +150,12 @@ class MCTS:
         return -value
 
     def evaluate(self, node):
-        board = np.array(node.state).reshape((1, 1, config.BOARD_SIZE, config.BOARD_SIZE)).astype(np.float32)
+        board = np.array(node.state).reshape((1, 1, self.board_size, self.board_size)).astype(np.float32)
         board = torch.tensor(board, device=self.device)
         self.model.eval()
         with torch.no_grad():
             policy, value = self.model(board)
-        policy = np.exp(policy.cpu().numpy()[0] / config.TEMPERATURE)
+        policy = np.exp(policy.cpu().numpy()[0] / config['TEMPERATURE'])
         policy = policy / np.sum(policy)
         return policy, value.cpu().numpy()[0][0]
 
@@ -196,14 +201,14 @@ def play_game_worker(args):
     model_state_dict, board_size, opponent, device, epsilon = args
     model = create_model(board_size).to(device)
     model.load_state_dict(model_state_dict)
-    mcts = MCTS(model, epsilon=epsilon)
+    mcts = MCTS(model, epsilon=epsilon, board_size=board_size)
     return play_game(mcts, board_size, opponent)
 
-def play_games(model, board_size, num_games, opponent='random', epsilon=config.EPSILON_START):
+def play_games(model, board_size, num_games, opponent='random', epsilon=0.1):
     model_state_dict = model.state_dict()
     total_cpus = os.cpu_count()
-    if config.PARALLEL_GAMES:
-        num_threads = min(total_cpus, config.NUM_PARALLEL_THREADS)
+    if config['PARALLEL_GAMES']:
+        num_threads = min(total_cpus, config['NUM_PARALLEL_THREADS'])
         log_message(f"Using {num_threads} parallel threads out of {total_cpus} available")
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         mp.set_start_method('spawn', force=True)
@@ -214,7 +219,7 @@ def play_games(model, board_size, num_games, opponent='random', epsilon=config.E
     else:
         log_message(f"Parallel games disabled. Using a single thread out of {total_cpus} available")
         results = []
-        mcts = MCTS(model, epsilon=epsilon)
+        mcts = MCTS(model, epsilon=epsilon, board_size=board_size)
         for _ in tqdm(range(num_games), unit='game'):
             results.append(play_game(mcts, board_size, opponent))
         return results
@@ -254,16 +259,14 @@ def play_validation(args):
             (game.winner == 1 and starter == "current") or (game.winner == -1 and starter == "checkpoint")) else 0
     return result, move_count
 
-
-def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAMES_PER_CHECKPOINT, model_folder='models',
-                                 checkpoints=[]):
+def validate_against_checkpoints(model, board_size, num_games=10, model_folder='models', checkpoints=[]):
     model.eval()
-    current_mcts = MCTS(model)
+    current_mcts = MCTS(model, board_size=board_size)
     win_rates = []
     move_rates = []
 
     # Begrenze die Checkpoints-Liste auf die gewünschte Anzahl von Agenten plus den Random-Agenten
-    checkpoints = checkpoints[:config.NUM_OF_AGENTS + 1]
+    checkpoints = checkpoints[:config['NUM_OF_AGENTS'] + 1]
 
     with torch.no_grad():
         for i, checkpoint in enumerate(tqdm(checkpoints, desc='Checkpoints', unit='checkpoint')):  # Including RandomAgent
@@ -271,15 +274,15 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
                 checkpoint_mcts = RandomAgent()
             else:
                 checkpoint_model, _ = load_checkpoint(checkpoint, board_size)
-                checkpoint_mcts = MCTS(checkpoint_model)
+                checkpoint_mcts = MCTS(checkpoint_model, board_size=board_size)
 
             wins = 0
             total_moves = 0
             random_agent = True if i == 0 else False
 
-            if config.PARALLEL_GAMES:
+            if config['PARALLEL_GAMES']:
                 total_cpus = os.cpu_count()
-                num_threads = min(total_cpus, config.NUM_PARALLEL_THREADS)
+                num_threads = min(total_cpus, config['NUM_PARALLEL_THREADS'])
                 mp.set_start_method('spawn', force=True)
                 with Pool(num_threads) as pool:
                     args = [(board_size, current_mcts, checkpoint_mcts, random_agent) for _ in range(num_games)]
@@ -298,11 +301,13 @@ def validate_against_checkpoints(model, board_size, num_games=config.NUM_OF_GAME
 
     return win_rates, move_rates
 
-def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_per_epoch=config.NUM_OF_GAMES_PER_EPOCH):
+def train_model():
+    local_config = deepcopy(config)  # Create a local copy of the configuration
+
     device = setup_device()
     log_message("Creating model...")
-    model = create_model(board_size).to(device)
-    mcts = MCTS(model)
+    model = create_model(local_config['BOARD_SIZE']).to(device)
+    mcts = MCTS(model, simulations=local_config['MCTS_SIMULATIONS'], epsilon=local_config['EPSILON_START'], board_size=local_config['BOARD_SIZE'])
     best_loss = float('inf')
     best_model_state = None
 
@@ -319,49 +324,49 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
     torch.save({'state_dict': None, 'optimizer': None}, random_agent_checkpoint_path)
 
     log_message("Saving config to file...")
-    save_config_to_file(config, filename=os.path.join(model_folder, 'config.py'))
+    save_config_to_file(local_config, filename=os.path.join(model_folder, 'config.py'))
 
     losses = []
     policy_losses = []
     value_losses = []
-    win_rates = [[] for _ in range(config.NUM_OF_AGENTS + 1)]  # Including Random Agent
-    avg_moves = [[] for _ in range(config.NUM_OF_AGENTS + 1)]  # Including Random Agent
+    win_rates = [[] for _ in range(local_config['NUM_OF_AGENTS'] + 1)]  # Including Random Agent
+    avg_moves = [[] for _ in range(local_config['NUM_OF_AGENTS'] + 1)]  # Including Random Agent
 
     criterion_policy = nn.KLDivLoss(reduction='batchmean')
     criterion_value = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=config.WARMUP_LEARNING_RATE, weight_decay=config.WEIGHT_DECAY)
-    scheduler = StepLR(optimizer, config.STEP_SIZE, gamma=config.GAMMA)
+    optimizer = optim.Adam(model.parameters(), lr=local_config['WARMUP_LEARNING_RATE'], weight_decay=local_config['WEIGHT_DECAY'])
+    scheduler = StepLR(optimizer, local_config['STEP_SIZE'], gamma=local_config['GAMMA'])
     model.to(device)
 
     replay_buffer = ReplayBuffer(capacity=10000)
 
-    for epoch in range(1, epochs + 1):
-        log_message(f"Starting Epoch {epoch}/{epochs}")
-        if epoch <= config.WARMUP_EPOCHS:
-            lr = config.WARMUP_LEARNING_RATE + (config.LEARNING_RATE - config.WARMUP_LEARNING_RATE) * (
-                    epoch / config.WARMUP_EPOCHS)
+    for epoch in range(1, local_config['EPOCHS'] + 1):
+        log_message(f"Starting Epoch {epoch}/{local_config['EPOCHS']}")
+        if epoch <= local_config['WARMUP_EPOCHS']:
+            lr = local_config['WARMUP_LEARNING_RATE'] + (local_config['LEARNING_RATE'] - local_config['WARMUP_LEARNING_RATE']) * (
+                    epoch / local_config['WARMUP_EPOCHS'])
             for param_group in optimizer.param_groups:
                 param_group['lr'] = lr
-        elif epoch == config.WARMUP_EPOCHS + 1:
+        elif epoch == local_config['WARMUP_EPOCHS'] + 1:
             for param_group in optimizer.param_groups:
-                param_group['lr'] = config.LEARNING_RATE
+                param_group['lr'] = local_config['LEARNING_RATE']
 
-        epsilon = config.EPSILON_END + (config.EPSILON_START - config.EPSILON_END) * (1 - epoch / epochs)
-        results = play_games(model, board_size, num_games_per_epoch,
-                             opponent='self' if epoch > config.RANDOM_EPOCHS else 'random', epsilon=epsilon)
+        epsilon = local_config['EPSILON_END'] + (local_config['EPSILON_START'] - local_config['EPSILON_END']) * (1 - epoch / local_config['EPOCHS'])
+        results = play_games(model, local_config['BOARD_SIZE'], local_config['NUM_OF_GAMES_PER_EPOCH'],
+                             opponent='self' if epoch > local_config['RANDOM_EPOCHS'] else 'random', epsilon=epsilon)
 
         for state_history, result in results:
             for state in state_history:
-                policies = np.random.dirichlet(np.ones(board_size * board_size))
+                policies = np.random.dirichlet(np.ones(local_config['BOARD_SIZE'] * local_config['BOARD_SIZE']))
                 replay_buffer.add((state, policies, result))
 
-        if len(replay_buffer) < config.BATCH_SIZE:
+        if len(replay_buffer) < local_config['BATCH_SIZE']:
             log_message("Not enough samples in replay buffer. Skipping training.")
             continue
 
-        states, policies, values = zip(*replay_buffer.sample(config.BATCH_SIZE))
+        states, policies, values = zip(*replay_buffer.sample(local_config['BATCH_SIZE']))
 
-        states = np.array(states).reshape((-1, 1, board_size, board_size))
+        states = np.array(states).reshape((-1, 1, local_config['BOARD_SIZE'], local_config['BOARD_SIZE']))
         policies = np.array(policies)
         values = np.array(values).astype(np.float32)
 
@@ -375,7 +380,7 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
         policy_outputs, value_outputs = model(states)
         policy_loss = criterion_policy(policy_outputs, policies)
         value_loss = criterion_value(value_outputs.squeeze(), values)
-        loss = config.POLICY_LOSS_WEIGHT * policy_loss + config.VALUE_LOSS_WEIGHT * value_loss
+        loss = local_config['POLICY_LOSS_WEIGHT'] * policy_loss + local_config['VALUE_LOSS_WEIGHT'] * value_loss
 
         loss.backward()
         optimizer.step()
@@ -385,20 +390,20 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
         policy_losses.append(policy_loss.item())
         value_losses.append(value_loss.item())
 
-        if epoch == 1 or epoch % config.CHECKPOINT_INTERVAL == 0:
+        if epoch == 1 or epoch % local_config['CHECKPOINT_INTERVAL'] == 0:
             checkpoint_epoch = epoch
             save_checkpoint(model, optimizer, checkpoint_epoch, model_folder,
                             filename=f'checkpoint_epoch_{checkpoint_epoch}.pth.tar')
 
         win_rates_checkpoint, avg_moves_checkpoint = [], []
-        if epoch % config.EVALUATION_INTERVAL == 0 or epoch == epochs:
+        if epoch % local_config['EVALUATION_INTERVAL'] == 0 or epoch == local_config['EPOCHS']:
             checkpoints = [random_agent_checkpoint_path] + [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar')
-                                                            for e in range(config.CHECKPOINT_INTERVAL, epoch + 1,
-                                                                           config.CHECKPOINT_INTERVAL)]
-            checkpoints = checkpoints[:config.NUM_OF_AGENTS + 1]  # Sicherstellen, dass die Liste korrekt begrenzt ist
+                                                            for e in range(local_config['CHECKPOINT_INTERVAL'], epoch + 1,
+                                                                           local_config['CHECKPOINT_INTERVAL'])]
+            checkpoints = checkpoints[:local_config['NUM_OF_AGENTS'] + 1]  # Sicherstellen, dass die Liste korrekt begrenzt ist
             log_message(f"Evaluating against checkpoints: {checkpoints}")
-            win_rates_checkpoint, avg_moves_checkpoint = validate_against_checkpoints(model, board_size,
-                                                                                      num_games=config.NUM_OF_GAMES_PER_CHECKPOINT,
+            win_rates_checkpoint, avg_moves_checkpoint = validate_against_checkpoints(model, local_config['BOARD_SIZE'],
+                                                                                      num_games=local_config['NUM_OF_GAMES_PER_CHECKPOINT'],
                                                                                       model_folder=model_folder,
                                                                                       checkpoints=checkpoints)
             for i, (wr, am) in enumerate(zip(win_rates_checkpoint, avg_moves_checkpoint)):
@@ -407,12 +412,12 @@ def train_model(board_size=config.BOARD_SIZE, epochs=config.EPOCHS, num_games_pe
 
         total_loss = policy_loss.item() + value_loss.item()
         log_message(
-            f"Completed Epoch {epoch}/{epochs} with Loss: {total_loss}, Policy Loss: {policy_loss.item()}, Value Loss: {value_loss.item()}")
+            f"Completed Epoch {epoch}/{local_config['EPOCHS']} with Loss: {total_loss}, Policy Loss: {policy_loss.item()}, Value Loss: {value_loss.item()}")
         log_message(
             f"Random_Agent: Win Rates: {win_rates[0][-1] if win_rates[0] else 'N/A'}, Avg. Moves: {avg_moves[0][-1] if avg_moves[0] else 'N/A'}")
         for i in range(1, len(win_rates)):
             log_message(
-                f"Agent_Checkpoint_Epoch_{i * config.CHECKPOINT_INTERVAL}: Win Rates: {win_rates[i][-1] if win_rates[i] else 'N/A'}, Avg. Moves: {avg_moves[i][-1] if avg_moves[i] else 'N/A'}")
+                f"Agent_Checkpoint_Epoch_{i * local_config['CHECKPOINT_INTERVAL']}: Win Rates: {win_rates[i][-1] if win_rates[i] else 'N/A'}, Avg. Moves: {avg_moves[i][-1] if avg_moves[i] else 'N/A'}")
 
         if loss.item() < best_loss:
             best_loss = loss.item()
@@ -451,11 +456,11 @@ def save_results(losses, win_rates, policy_losses, value_losses, best_model_path
 
         # Calculate epochs for this agent
         if i == 0:
-            agent_epochs = list(range(config.EVALUATION_INTERVAL, epochs + 1, config.EVALUATION_INTERVAL))
+            agent_epochs = list(range(config['EVALUATION_INTERVAL'], epochs + 1, config['EVALUATION_INTERVAL']))
             legend_name = 'Random_Agent'
         else:
-            start_epoch = config.CHECKPOINT_INTERVAL * i
-            agent_epochs = list(range(start_epoch, epochs + 1, config.EVALUATION_INTERVAL))
+            start_epoch = config['CHECKPOINT_INTERVAL'] * i
+            agent_epochs = list(range(start_epoch, epochs + 1, config['EVALUATION_INTERVAL']))
             legend_name = f'checkpoint_epoch_{start_epoch}'
 
         plt.figure()
@@ -481,10 +486,10 @@ def save_results(losses, win_rates, policy_losses, value_losses, best_model_path
     for i in range(len(win_rates)):
         agent_win_rates = win_rates[i]
         if i == 0:
-            agent_epochs = list(range(config.EVALUATION_INTERVAL, epochs + 1, config.EVALUATION_INTERVAL))
+            agent_epochs = list(range(config['EVALUATION_INTERVAL'], epochs + 1, config['EVALUATION_INTERVAL']))
         else:
-            start_epoch = config.CHECKPOINT_INTERVAL * i
-            agent_epochs = list(range(start_epoch, epochs + 1, config.EVALUATION_INTERVAL))
+            start_epoch = config['CHECKPOINT_INTERVAL'] * i
+            agent_epochs = list(range(start_epoch, epochs + 1, config['EVALUATION_INTERVAL']))
         label = f'Random_Agent' if i == 0 else f'checkpoint_epoch_{start_epoch}'
         plt.plot(agent_epochs, agent_win_rates, label=label)
     plt.xlabel('Epoch')
@@ -498,10 +503,10 @@ def save_results(losses, win_rates, policy_losses, value_losses, best_model_path
     for i in range(len(avg_moves)):
         agent_avg_moves = avg_moves[i]
         if i == 0:
-            agent_epochs = list(range(config.EVALUATION_INTERVAL, epochs + 1, config.EVALUATION_INTERVAL))
+            agent_epochs = list(range(config['EVALUATION_INTERVAL'], epochs + 1, config['EVALUATION_INTERVAL']))
         else:
-            start_epoch = config.CHECKPOINT_INTERVAL * i
-            agent_epochs = list(range(start_epoch, epochs + 1, config.EVALUATION_INTERVAL))
+            start_epoch = config['CHECKPOINT_INTERVAL'] * i
+            agent_epochs = list(range(start_epoch, epochs + 1, config['EVALUATION_INTERVAL']))
         label = f'Random_Agent' if i == 0 else f'checkpoint_epoch_{start_epoch}'
         plt.plot(agent_epochs, agent_avg_moves, label=label)
     plt.xlabel('Epoch')
