@@ -28,8 +28,8 @@ def save_results(losses, win_rates, policy_losses, value_losses, path, avg_moves
             start_epoch = config['EVALUATION_INTERVAL']
             legend_name = 'Random Agent'
         else:
-            start_epoch = config['CHECKPOINT_INTERVAL'] * i
-            legend_name = f'Agent Checkpoint Epoch {start_epoch}'
+            start_epoch = config['CHECKPOINT_INTERVAL'] * i + config['EVALUATION_INTERVAL']
+            legend_name = f'Agent Checkpoint Epoch {config["CHECKPOINT_INTERVAL"] * i}'
 
         agent_epochs = list(range(start_epoch, start_epoch + len(win_rates[i]) * config['EVALUATION_INTERVAL'], config['EVALUATION_INTERVAL']))
         agent_win_rates = win_rates[i]
@@ -60,8 +60,8 @@ def save_results(losses, win_rates, policy_losses, value_losses, path, avg_moves
             start_epoch = config['EVALUATION_INTERVAL']
             legend_name = 'Random Agent'
         else:
-            start_epoch = config['CHECKPOINT_INTERVAL'] * i
-            legend_name = f'Agent Checkpoint Epoch {start_epoch}'
+            start_epoch = config['CHECKPOINT_INTERVAL'] * i + config['EVALUATION_INTERVAL']
+            legend_name = f'Agent Checkpoint Epoch {config["CHECKPOINT_INTERVAL"] * i}'
 
         agent_epochs = list(range(start_epoch, start_epoch + len(win_rates[i]) * config['EVALUATION_INTERVAL'], config['EVALUATION_INTERVAL']))
         agent_win_rates = win_rates[i]
@@ -80,19 +80,18 @@ def save_results(losses, win_rates, policy_losses, value_losses, path, avg_moves
             start_epoch = config['EVALUATION_INTERVAL']
             legend_name = 'Random Agent'
         else:
-            start_epoch = config['CHECKPOINT_INTERVAL'] * i
-            legend_name = f'Agent Checkpoint Epoch {start_epoch}'
+            start_epoch = config['CHECKPOINT_INTERVAL'] * i + config['EVALUATION_INTERVAL']
+            legend_name = f'Agent Checkpoint Epoch {config["CHECKPOINT_INTERVAL"] * i}'
 
         agent_epochs = list(range(start_epoch, start_epoch + len(avg_moves[i]) * config['EVALUATION_INTERVAL'], config['EVALUATION_INTERVAL']))
         agent_avg_moves = avg_moves[i]
         plt.plot(agent_epochs, agent_avg_moves, label=legend_name)
-    plt.xlabel('Epochs')
-    plt.ylabel('Avg Moves')
-    plt.legend()
-    plt.title(f'Avg Moves for {board_size}x{board_size} Hex')
-    plt.savefig(f"{path}/avg_moves_combined.png")
-    plt.close()
-
+        plt.xlabel('Epochs')
+        plt.ylabel('Avg Moves')
+        plt.legend()
+        plt.title(f'Avg Moves for {board_size}x{board_size} Hex')
+        plt.savefig(f"{path}/avg_moves_combined.png")
+        plt.close()
 
 def save_config_to_file(config, filename="config.py"):
     with open(filename, 'w') as file:
