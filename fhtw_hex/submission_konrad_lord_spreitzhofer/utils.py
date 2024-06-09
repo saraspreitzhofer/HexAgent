@@ -7,89 +7,75 @@ import inspect
 from facade import MCTS, create_model
 import torch.optim as optim
 
-def save_results(losses, win_rates, policy_losses, value_losses, best_model_path, avg_moves, checkpoints):
-    epochs = len(losses)
 
-    # Plotting loss
+
+def save_results(losses, win_rates, policy_losses, value_losses, path, avg_moves, checkpoints):
+    epochs = list(range(1, len(losses) + 1))
+
+    # Save loss plot
     plt.figure()
-    plt.plot(range(epochs), losses, label="Total Loss")
-    plt.plot(range(epochs), policy_losses, label="Policy Loss")
-    plt.plot(range(epochs), value_losses, label="Value Loss")
-    plt.xlabel('Epoch')
+    plt.plot(epochs, losses, label='Total Loss')
+    plt.plot(epochs, policy_losses, label='Policy Loss')
+    plt.plot(epochs, value_losses, label='Value Loss')
+    plt.xlabel('Epochs')
     plt.ylabel('Loss')
     plt.legend()
-    plt.title('Loss over Epochs')
-    plt.savefig(os.path.join(best_model_path, 'loss.png'))
+    plt.title('Losses')
+    plt.savefig(f"{path}/loss.png")
     plt.close()
 
-    # Plotting win rates and moves
+    # Save win rates and avg moves plot
     for i in range(len(win_rates)):
+        agent_epochs = list(range(0, len(win_rates[i]) * config['EVALUATION_INTERVAL'], config['EVALUATION_INTERVAL']))
         agent_win_rates = win_rates[i]
         agent_avg_moves = avg_moves[i]
 
-        # Calculate epochs for this agent
-        if i == 0:
-            agent_epochs = list(range(config.EVALUATION_INTERVAL, epochs + 1, config.EVALUATION_INTERVAL))
-            legend_name = 'Random_Agent'
-        else:
-            start_epoch = config.CHECKPOINT_INTERVAL * i
-            agent_epochs = list(range(start_epoch, epochs + 1, config.EVALUATION_INTERVAL))
-            legend_name = f'Agent_Epoch_{start_epoch}'
-
         plt.figure()
-        plt.plot(agent_epochs, agent_win_rates, label=f'{legend_name} Win Rate')
-        plt.xlabel('Epoch')
+        plt.plot(agent_epochs, agent_win_rates, label=f'Agent {i} Win Rate')
+        plt.xlabel('Epochs')
         plt.ylabel('Win Rate')
         plt.legend()
-        plt.title('Win Rate over Checkpoints')
-        plt.savefig(os.path.join(best_model_path, f'win_rate_{i}.png'))
+        plt.title(f'Win Rate of Agent {i}')
+        plt.savefig(f"{path}/win_rate_agent_{i}.png")
         plt.close()
 
         plt.figure()
-        plt.plot(agent_epochs, agent_avg_moves, label=f'{legend_name} Avg. Moves')
-        plt.xlabel('Epoch')
-        plt.ylabel('Moves')
+        plt.plot(agent_epochs, agent_avg_moves, label=f'Agent {i} Avg Moves')
+        plt.xlabel('Epochs')
+        plt.ylabel('Avg Moves')
         plt.legend()
-        plt.title('Moves over Checkpoints')
-        plt.savefig(os.path.join(best_model_path, f'avg_moves_{i}.png'))
+        plt.title(f'Avg Moves of Agent {i}')
+        plt.savefig(f"{path}/avg_moves_agent_{i}.png")
         plt.close()
 
-    # Plotting combined win rates and moves
+    # Combined plot for win rates
     plt.figure()
     for i in range(len(win_rates)):
+        agent_epochs = list(range(0, len(win_rates[i]) * config['EVALUATION_INTERVAL'], config['EVALUATION_INTERVAL']))
         agent_win_rates = win_rates[i]
-        if i == 0:
-            agent_epochs = list(range(config.EVALUATION_INTERVAL, epochs + 1, config.EVALUATION_INTERVAL))
-            label = 'Random_Agent'
-        else:
-            start_epoch = config.CHECKPOINT_INTERVAL * i
-            agent_epochs = list(range(start_epoch, epochs + 1, config.EVALUATION_INTERVAL))
-            label = f'Agent_Epoch_{start_epoch}'
-        plt.plot(agent_epochs, agent_win_rates, label=label)
-    plt.xlabel('Epoch')
+        legend_name = f'Random Agent' if i == 0 else f'Agent Checkpoint Epoch {i * config["CHECKPOINT_INTERVAL"]}'
+        plt.plot(agent_epochs, agent_win_rates, label=legend_name)
+    plt.xlabel('Epochs')
     plt.ylabel('Win Rate')
     plt.legend()
-    plt.title('Win Rate over Checkpoints')
-    plt.savefig(os.path.join(best_model_path, 'win_rate_combined.png'))
+    plt.title('Win Rates')
+    plt.savefig(f"{path}/win_rates_combined.png")
     plt.close()
 
+    # Combined plot for avg moves
     plt.figure()
     for i in range(len(avg_moves)):
+        agent_epochs = list(range(0, len(avg_moves[i]) * config['EVALUATION_INTERVAL'], config['EVALUATION_INTERVAL']))
         agent_avg_moves = avg_moves[i]
-        if i == 0:
-            agent_epochs = list(range(config.EVALUATION_INTERVAL, epochs + 1, config.EVALUATION_INTERVAL))
-            label = 'Random_Agent'
-        else:
-            start_epoch = config.CHECKPOINT_INTERVAL * i
-            agent_epochs = list(range(start_epoch, epochs + 1, config.EVALUATION_INTERVAL))
-            label = f'Agent_Epoch_{start_epoch}'
-        plt.plot(agent_epochs, agent_avg_moves, label=label)
-    plt.xlabel('Epoch')
-    plt.ylabel('Moves')
+        legend_name = f'Random Agent' if i == 0 else f'Agent Checkpoint Epoch {i * config["CHECKPOINT_INTERVAL"]}'
+        plt.plot(agent_epochs, agent_avg_moves, label=legend_name)
+    plt.xlabel('Epochs')
+    plt.ylabel('Avg Moves')
     plt.legend()
-    plt.title('Moves over Checkpoints')
-    plt.savefig(os.path.join(best_model_path, 'avg_moves_combined.png'))
+    plt.title('Avg Moves')
+    plt.savefig(f"{path}/avg_moves_combined.png")
     plt.close()
+
 
 def save_config_to_file(config_module, filename="config.py"):
     with open(filename, 'w') as file:
