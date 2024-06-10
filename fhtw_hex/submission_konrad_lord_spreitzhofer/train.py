@@ -130,15 +130,13 @@ def validate_against_checkpoints(model, board_size, num_games=10, model_folder='
 
     return win_rates, move_rates
 
-
 def train_model():
     local_config = deepcopy(config)
 
     device = setup_device()
     log_message("Creating model...")
     model = create_model(local_config['BOARD_SIZE']).to(device)
-    mcts = MCTS(model, simulations=local_config['MCTS_SIMULATIONS'], epsilon=local_config['EPSILON_START'],
-                board_size=local_config['BOARD_SIZE'])
+    mcts = MCTS(model, simulations=local_config['MCTS_SIMULATIONS'], epsilon=local_config['EPSILON_START'], board_size=local_config['BOARD_SIZE'])
     best_loss = float('inf')
     best_model_state = None
 
@@ -164,8 +162,7 @@ def train_model():
 
     criterion_policy = nn.KLDivLoss(reduction='batchmean')
     criterion_value = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=local_config['WARMUP_LEARNING_RATE'],
-                           weight_decay=local_config['WEIGHT_DECAY'])
+    optimizer = optim.Adam(model.parameters(), lr=local_config['WARMUP_LEARNING_RATE'], weight_decay=local_config['WEIGHT_DECAY'])
     scheduler = StepLR(optimizer, local_config['STEP_SIZE'], gamma=local_config['GAMMA'])
     model.to(device)
 
@@ -174,9 +171,7 @@ def train_model():
     for epoch in range(1, local_config['EPOCHS'] + 1):
         log_message(f"Starting Epoch {epoch}/{local_config['EPOCHS']}")
         if epoch <= local_config['WARMUP_EPOCHS']:
-            lr = local_config['WARMUP_LEARNING_RATE'] + (
-                        local_config['LEARNING_RATE'] - local_config['WARMUP_LEARNING_RATE']) * (
-                             epoch / local_config['WARMUP_EPOCHS'])
+            lr = local_config['WARMUP_LEARNING_RATE'] + (local_config['LEARNING_RATE'] - local_config['WARMUP_LEARNING_RATE']) * (epoch / local_config['WARMUP_EPOCHS'])
             for param_group in optimizer.param_groups:
                 param_group['lr'] = lr
         elif epoch == local_config['WARMUP_EPOCHS'] + 1:
@@ -184,9 +179,8 @@ def train_model():
                 param_group['lr'] = local_config['LEARNING_RATE']
 
         # Anpassung des Epsilon-Werts
-        epsilon = local_config['EPSILON_END'] + (local_config['EPSILON_START'] - local_config['EPSILON_END']) * np.exp(
-            -0.05 * epoch)
-        mcts.epsilon = epsilon
+        epsilon_decay_rate = np.log(local_config['EPSILON_END'] / local_config['EPSILON_START']) / local_config['EPOCHS']
+        epsilon = local_config['EPSILON_START'] * np.exp(epsilon_decay_rate * epoch)
 
         results = play_games(model, local_config['BOARD_SIZE'], local_config['NUM_OF_GAMES_PER_EPOCH'],
                              opponent='self' if epoch > local_config['RANDOM_EPOCHS'] else 'random', epsilon=epsilon)
@@ -234,14 +228,12 @@ def train_model():
         win_rates_checkpoint, avg_moves_checkpoint = [], []
         if epoch % local_config['EVALUATION_INTERVAL'] == 0 or epoch == local_config['EPOCHS']:
             checkpoints = [random_agent_checkpoint_path] + [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar')
-                                                            for e in
-                                                            range(local_config['CHECKPOINT_INTERVAL'], epoch + 1,
-                                                                  local_config['CHECKPOINT_INTERVAL'])]
+                                                            for e in range(local_config['CHECKPOINT_INTERVAL'], epoch + 1,
+                                                                           local_config['CHECKPOINT_INTERVAL'])]
             checkpoints = checkpoints[:local_config['NUM_OF_AGENTS'] + 1]
             log_message(f"Evaluating against checkpoints: {checkpoints}")
             win_rates_checkpoint, avg_moves_checkpoint = validate_against_checkpoints(model, local_config['BOARD_SIZE'],
-                                                                                      num_games=local_config[
-                                                                                          'NUM_OF_GAMES_PER_CHECKPOINT'],
+                                                                                      num_games=local_config['NUM_OF_GAMES_PER_CHECKPOINT'],
                                                                                       model_folder=model_folder,
                                                                                       checkpoints=checkpoints)
             for i, (wr, am) in enumerate(zip(win_rates_checkpoint, avg_moves_checkpoint)):
@@ -249,13 +241,10 @@ def train_model():
                 avg_moves[i].append(am)
 
         total_loss = policy_loss.item() + value_loss.item()
-        log_message(
-            f"Completed Epoch {epoch}/{local_config['EPOCHS']} with Loss: {total_loss}, Policy Loss: {policy_loss.item()}, Value Loss: {value_loss.item()}")
-        log_message(
-            f"Random_Agent: Win Rates: {win_rates[0][-1] if win_rates[0] else 'N/A'}, Avg. Moves: {avg_moves[0][-1] if avg_moves[0] else 'N/A'}")
+        log_message(f"Completed Epoch {epoch}/{local_config['EPOCHS']} with Loss: {total_loss}, Policy Loss: {policy_loss.item()}, Value Loss: {value_loss.item()}")
+        log_message(f"Random_Agent: Win Rates: {win_rates[0][-1] if win_rates[0] else 'N/A'}, Avg. Moves: {avg_moves[0][-1] if avg_moves[0] else 'N/A'}")
         for i in range(1, len(win_rates)):
-            log_message(
-                f"Agent_Checkpoint_Epoch_{i * local_config['CHECKPOINT_INTERVAL']}: Win Rates: {win_rates[i][-1] if win_rates[i] else 'N/A'}, Avg. Moves: {avg_moves[i][-1] if avg_moves[i] else 'N/A'}")
+            log_message(f"Agent_Checkpoint_Epoch_{i * local_config['CHECKPOINT_INTERVAL']}: Win Rates: {win_rates[i][-1] if win_rates[i] else 'N/A'}, Avg. Moves: {avg_moves[i][-1] if avg_moves[i] else 'N/A'}")
 
         if loss.item() < best_loss:
             best_loss = loss.item()
@@ -271,7 +260,6 @@ def train_model():
     save_log_to_file(log_path)
     log_message(f"Logfile created at {log_path}")
 
-
 if __name__ == "__main__":
     log_message("CUDA available: " + str(torch.cuda.is_available()))
     if torch.cuda.is_available():
@@ -280,4 +268,3 @@ if __name__ == "__main__":
         log_message("CUDA device not found. Please check your CUDA installation.")
     mp.set_start_method('spawn')
     train_model()
-
