@@ -87,9 +87,8 @@ class HexNet(nn.Module):
         self.board_size = board_size
         self.conv1 = nn.Conv2d(1, 64, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(64)
-        self.residual_blocks = nn.ModuleList([ResidualBlock(64) for _ in range(4)]) #Anzahl der Blöcke
+        self.residual_blocks = nn.ModuleList([ResidualBlock(64) for _ in range(3)])  # 3 Residual Blöcke
         self.flatten = nn.Flatten()
-        self.dropout = nn.Dropout(p=0.2)  # Dropout-Schicht mit einer Dropout-Rate von 30%
         self.policy_head = nn.Linear(64 * board_size * board_size, board_size * board_size)
         self.value_head = nn.Linear(64 * board_size * board_size, 1)
 
@@ -98,7 +97,6 @@ class HexNet(nn.Module):
         for block in self.residual_blocks:
             x = block(x)
         x = self.flatten(x)
-        x = self.dropout(x)  # Dropout-Schicht anwenden
         policy = F.log_softmax(self.policy_head(x), dim=1)
         value = torch.tanh(self.value_head(x))
         return policy, value
