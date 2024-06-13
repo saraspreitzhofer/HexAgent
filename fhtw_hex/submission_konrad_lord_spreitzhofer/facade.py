@@ -84,13 +84,14 @@ class ResidualBlock(nn.Module):
 class HexNet(nn.Module):
     def __init__(self, board_size):
         super(HexNet, self).__init__()
+        channels = 256
         self.board_size = board_size
-        self.conv1 = nn.Conv2d(1, 64, kernel_size=3, padding=1)
-        self.bn1 = nn.BatchNorm2d(64)
-        self.residual_blocks = nn.ModuleList([ResidualBlock(256) for _ in range(10)])  # 3 Residual Blöcke
+        self.conv1 = nn.Conv2d(1, channels, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(channels)
+        self.residual_blocks = nn.ModuleList([ResidualBlock(channels) for _ in range(10)])  # 3 Residual Blöcke
         self.flatten = nn.Flatten()
-        self.policy_head = nn.Linear(64 * board_size * board_size, board_size * board_size)
-        self.value_head = nn.Linear(64 * board_size * board_size, 1)
+        self.policy_head = nn.Linear(channels * board_size * board_size, board_size * board_size)
+        self.value_head = nn.Linear(channels * board_size * board_size, 1)
 
     def forward(self, x):
         x = F.relu(self.bn1(self.conv1(x)))
