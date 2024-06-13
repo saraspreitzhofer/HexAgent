@@ -31,7 +31,7 @@ NUM_OF_AGENTS = 2                  # Number of agents to save (excluded Random A
 
 REPLAY_BUFFER_CAPACITY = 120000    # Saving and using moves from past
 PARALLEL_GAMES = True # Set to True to parallelize games in training
-NUM_PARALLEL_THREADS = 12 # Number of parallel threads to use (adjust based on CPU)
+NUM_PARALLEL_THREADS = 24 # Number of parallel threads to use (adjust based on CPU)
                          # if number is higher than avaiable threads than max threads will be used
 
 
