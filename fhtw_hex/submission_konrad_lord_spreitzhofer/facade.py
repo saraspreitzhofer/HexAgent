@@ -32,7 +32,7 @@ class Node:
         return temp_hex_position
 
     def is_terminal(self):
-        return self.hex_position.winner != 0
+        return self.hex_position.wwinner != 0
 
     def is_expanded(self):
         return len(self.children) > 0
@@ -178,3 +178,4 @@ def agent(board, action_set):
     model.load_state_dict(torch.load(config.MODEL, map_location=device))
     model.to(device)  # Move the model to GPU
     return MCTS(model).get_action(board, action_set)
+
