@@ -32,7 +32,7 @@ class Node:
         return temp_hex_position
 
     def is_terminal(self):
-        return self.hex_position.wwinner != 0
+        return self.hex_position.winner != 0
 
     def is_expanded(self):
         return len(self.children) > 0
