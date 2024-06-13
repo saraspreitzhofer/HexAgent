@@ -87,7 +87,7 @@ class HexNet(nn.Module):
         self.board_size = board_size
         self.conv1 = nn.Conv2d(1, 64, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(64)
-        self.residual_blocks = nn.ModuleList([ResidualBlock(64) for _ in range(3)])  # 3 Residual Blöcke
+        self.residual_blocks = nn.ModuleList([ResidualBlock(256) for _ in range(10)])  # 3 Residual Blöcke
         self.flatten = nn.Flatten()
         self.policy_head = nn.Linear(64 * board_size * board_size, board_size * board_size)
         self.value_head = nn.Linear(64 * board_size * board_size, 1)
