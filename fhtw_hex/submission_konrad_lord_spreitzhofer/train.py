@@ -23,6 +23,10 @@ config = deepcopy(base_config_dict)
 def play_game(mcts: MCTS, board_size: int, opponent='random'):
     game = engine.HexPosition(board_size)
     state_history = []
+
+    # Randomize the starting player
+    game.player = choice([1, -1])
+
     while game.winner == 0:
         state_history.append(deepcopy(game.board))
         if game.player == 1:
@@ -31,6 +35,7 @@ def play_game(mcts: MCTS, board_size: int, opponent='random'):
             chosen = choice(game.get_action_space()) if opponent == 'random' else mcts.get_action(game.board, game.get_action_space())
         game.moove(chosen)
     return state_history, game.winner
+
 
 def play_game_worker(args):
     model_state_dict, board_size, opponent, device, epsilon, temperature = args
