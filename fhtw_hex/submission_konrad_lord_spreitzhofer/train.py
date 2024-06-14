@@ -33,13 +33,13 @@ def play_game(mcts: MCTS, board_size: int, opponent='random'):
     return state_history, game.winner
 
 def play_game_worker(args):
-    model_state_dict, board_size, opponent, device, epsilon = args
+    model_state_dict, board_size, opponent, device, epsilon, temperature = args
     model = create_model(board_size).to(device)
     model.load_state_dict(model_state_dict)
-    mcts = MCTS(model, epsilon=epsilon, board_size=board_size)
+    mcts = MCTS(model, epsilon=epsilon, temperature=temperature, board_size=board_size)
     return play_game(mcts, board_size, opponent)
 
-def play_games(model, board_size, num_games, opponent='random', epsilon=0.1):
+def play_games(model, board_size, num_games, opponent='random', epsilon=0.1, temperature=1.0):
     model_state_dict = model.state_dict()
     total_cpus = os.cpu_count()
     if config['PARALLEL_GAMES']:
@@ -48,13 +48,13 @@ def play_games(model, board_size, num_games, opponent='random', epsilon=0.1):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         mp.set_start_method('spawn', force=True)
         with Pool(num_threads) as pool:
-            args = [(model_state_dict, board_size, opponent, device, epsilon) for _ in range(num_games)]
+            args = [(model_state_dict, board_size, opponent, device, epsilon, temperature) for _ in range(num_games)]
             results = list(tqdm(pool.imap(play_game_worker, args), total=num_games, unit='game'))
         return results
     else:
         log_message(f"Parallel games disabled. Using a single thread out of {total_cpus} available")
         results = []
-        mcts = MCTS(model, epsilon=epsilon, board_size=board_size)
+        mcts = MCTS(model, epsilon=epsilon, temperature=temperature, board_size=board_size)
         for _ in tqdm(range(num_games), unit='game'):
             results.append(play_game(mcts, board_size, opponent))
         return results
@@ -136,7 +136,7 @@ def train_model():
     device = setup_device()
     log_message("Creating model...")
     model = create_model(local_config['BOARD_SIZE']).to(device)
-    mcts = MCTS(model, simulations=local_config['MCTS_SIMULATIONS'], epsilon=local_config['EPSILON_START'], board_size=local_config['BOARD_SIZE'])
+    mcts = MCTS(model, simulations=local_config['MCTS_SIMULATIONS'], epsilon=local_config['EPSILON_START'], temperature=local_config['TEMPERATURE_START'], board_size=local_config['BOARD_SIZE'])
     best_loss = float('inf')
     best_model_state = None
 
@@ -178,12 +178,16 @@ def train_model():
             for param_group in optimizer.param_groups:
                 param_group['lr'] = local_config['LEARNING_RATE']
 
-        # Anpassung des Epsilon-Werts
+        # Adjust epsilon
         epsilon_decay_rate = np.log(local_config['EPSILON_END'] / local_config['EPSILON_START']) / local_config['EPOCHS']
         epsilon = local_config['EPSILON_START'] * np.exp(epsilon_decay_rate * epoch)
 
+        # Adjust temperature
+        temperature_decay_rate = np.log(local_config['TEMPERATURE_END'] / local_config['TEMPERATURE_START']) / local_config['EPOCHS']
+        temperature = local_config['TEMPERATURE_START'] * np.exp(temperature_decay_rate * epoch)
+
         results = play_games(model, local_config['BOARD_SIZE'], local_config['NUM_OF_GAMES_PER_EPOCH'],
-                             opponent='self' if epoch > local_config['RANDOM_EPOCHS'] else 'random', epsilon=epsilon)
+                             opponent='self' if epoch > local_config['RANDOM_EPOCHS'] else 'random', epsilon=epsilon, temperature=temperature)
 
         for state_history, result in results:
             for state in state_history:
@@ -268,3 +272,4 @@ if __name__ == "__main__":
         log_message("CUDA device not found. Please check your CUDA installation.")
     mp.set_start_method('spawn')
     train_model()
+

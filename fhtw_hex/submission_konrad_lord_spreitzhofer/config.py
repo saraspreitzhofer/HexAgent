@@ -1,10 +1,11 @@
-BOARD_SIZE = 5
+BOARD_SIZE = 3
 
 #MCTS
 EPOCHS = 100
 NUM_OF_GAMES_PER_EPOCH = 50
 MCTS_SIMULATIONS = 600
-TEMPERATURE = 1.0
+TEMPERATURE_START = 1.0
+TEMPERATURE_END = 0.1
 EPSILON_START = 0.35  # Startvalue for epsilon-greedy strategie
 EPSILON_END = 0.08    # Endvalue  for epsilon-greedy strategie
 

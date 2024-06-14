@@ -85,12 +85,12 @@ class HexNet(nn.Module):
     def __init__(self, board_size):
         super(HexNet, self).__init__()
         self.board_size = board_size
-        self.conv1 = nn.Conv2d(1, 64, kernel_size=3, padding=1)
-        self.bn1 = nn.BatchNorm2d(64)
-        self.residual_blocks = nn.ModuleList([ResidualBlock(64) for _ in range(3)])  # 3 Residual Blöcke
+        self.conv1 = nn.Conv2d(1, 128, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(128)
+        self.residual_blocks = nn.ModuleList([ResidualBlock(128) for _ in range(6)])  # 3 Residual Blöcke
         self.flatten = nn.Flatten()
-        self.policy_head = nn.Linear(64 * board_size * board_size, board_size * board_size)
-        self.value_head = nn.Linear(64 * board_size * board_size, 1)
+        self.policy_head = nn.Linear(128 * board_size * board_size, board_size * board_size)
+        self.value_head = nn.Linear(128 * board_size * board_size, 1)
 
     def forward(self, x):
         x = F.relu(self.bn1(self.conv1(x)))
@@ -106,11 +106,12 @@ def create_model(board_size):
     return model
 
 class MCTS:
-    def __init__(self, model, simulations=config.MCTS_SIMULATIONS, device=device, epsilon=config.EPSILON_START, board_size=config.BOARD_SIZE):
+    def __init__(self, model, simulations=config.MCTS_SIMULATIONS, device=device, epsilon=config.EPSILON_START, temperature=config.TEMPERATURE_START, board_size=config.BOARD_SIZE):
         self.model = model
         self.simulations = simulations
         self.device = device
         self.epsilon = epsilon
+        self.temperature = temperature
         self.board_size = board_size
         self.model.to(self.device)
 
@@ -140,7 +141,7 @@ class MCTS:
         self.model.eval()
         with torch.no_grad():
             policy, value = self.model(board)
-        policy = np.exp(policy.cpu().numpy()[0] / config.TEMPERATURE)
+        policy = np.exp(policy.cpu().numpy()[0] / self.temperature)
         policy = policy / np.sum(policy)
         return policy, value.cpu().numpy()[0][0]
 
@@ -178,4 +179,3 @@ def agent(board, action_set):
     model.load_state_dict(torch.load(config.MODEL, map_location=device))
     model.to(device)  # Move the model to GPU
     return MCTS(model).get_action(board, action_set)
-
