@@ -27,14 +27,24 @@ def play_game(mcts: MCTS, board_size: int, opponent='random'):
     # Randomize the starting player
     game.player = choice([1, -1])
 
+    move_count = 0  # Track the number of moves
+
     while game.winner == 0:
         state_history.append(deepcopy(game.board))
+
         if game.player == 1:
             chosen = mcts.get_action(game.board, game.get_action_space())
         else:
             chosen = choice(game.get_action_space()) if opponent == 'random' else mcts.get_action(game.board, game.get_action_space())
+
         game.moove(chosen)
+        move_count += 1  # Increment move count
+
+        if game.winner != 0:
+            break  # Ensure no more moves are made after the game ends
+
     return state_history, game.winner
+
 
 
 def play_game_worker(args):
