@@ -20,30 +20,34 @@ from random import choice
 base_config_dict = {key: getattr(base_config, key) for key in dir(base_config) if not key.startswith("__")}
 config = deepcopy(base_config_dict)
 
-def play_game(mcts: MCTS, board_size: int, opponent='random'):
+def play_game(mcts: MCTS, board_size: int, opponent='self', move_penalty=0.01):
     game = engine.HexPosition(board_size)
     state_history = []
 
-    # Randomize the starting player
-    game.player = choice([1, -1])
-
-    move_count = 0  # Track the number of moves
+    game.player = choice([1, -1])  # Randomize the starting player
+    move_count = 0
 
     while game.winner == 0:
-        state_history.append(deepcopy(game.board))
-
+        state_history.append((deepcopy(game.board), game.player))
         if game.player == 1:
             chosen = mcts.get_action(game.board, game.get_action_space())
         else:
-            chosen = choice(game.get_action_space()) if opponent == 'random' else mcts.get_action(game.board, game.get_action_space())
-
+            chosen = mcts.get_action(game.board, game.get_action_space()) if opponent == 'self' else choice(game.get_action_space())
         game.moove(chosen)
-        move_count += 1  # Increment move count
-
+        move_count += 1
         if game.winner != 0:
-            break  # Ensure no more moves are made after the game ends
+            break
 
-    return state_history, game.winner
+    # Calculate rewards
+    if game.winner == 1:
+        player1_reward = 1 - (move_penalty * move_count)
+        player2_reward = -(1 - (move_penalty * move_count))
+    elif game.winner == -1:
+        player1_reward = -(1 - (move_penalty * move_count))
+        player2_reward = 1 - (move_penalty * move_count)
+
+    return state_history, player1_reward, player2_reward
+
 
 def play_game_worker(args):
     model_state_dict, board_size, opponent, device, epsilon, temperature = args
@@ -218,29 +222,29 @@ def train_model():
         temperature = local_config['TEMPERATURE_START'] * np.exp(temperature_decay_rate * epoch)
 
         results = play_games(model, local_config['BOARD_SIZE'], local_config['NUM_OF_GAMES_PER_EPOCH'],
-                             opponent='self' if epoch > local_config['RANDOM_EPOCHS'] else 'random', epsilon=epsilon,
-                             temperature=temperature)
+                             opponent='self', epsilon=epsilon, temperature=temperature)
 
-        for state_history, result in results:
-            for state in state_history:
+        for state_history, player1_reward, player2_reward in results:
+            for state, player in state_history:
                 policies = np.random.dirichlet(np.ones(local_config['BOARD_SIZE'] * local_config['BOARD_SIZE']))
-                td_error = compute_td_error(state, policies, result, model, device)
-                replay_buffer.add((state, policies, result), td_error)
+                reward = player1_reward if player == 1 else player2_reward
+                td_error = compute_td_error(state, policies, reward, model, device)
+                replay_buffer.add((state, policies, reward), td_error)
 
         if len(replay_buffer) < local_config['BATCH_SIZE']:
             log_message("Not enough samples in replay buffer. Skipping training.")
             continue
 
         indices, experiences, is_weights = replay_buffer.sample(local_config['BATCH_SIZE'])
-        states, policies, values = zip(*experiences)
+        states, policies, rewards = zip(*experiences)
 
         states = np.array(states).reshape((-1, 1, local_config['BOARD_SIZE'], local_config['BOARD_SIZE']))
         policies = np.array(policies)
-        values = np.array(values).astype(np.float32)
+        rewards = np.array(rewards).astype(np.float32)
 
         states = torch.tensor(states, dtype=torch.float32).to(device)
         policies = torch.tensor(policies, dtype=torch.float32).to(device)
-        values = torch.tensor(values, dtype=torch.float32).to(device)
+        rewards = torch.tensor(rewards, dtype=torch.float32).to(device)
         is_weights = torch.tensor(is_weights, dtype=torch.float32).to(device)
 
         model.train()
@@ -248,7 +252,7 @@ def train_model():
 
         policy_outputs, value_outputs = model(states)
         policy_loss = criterion_policy(policy_outputs, policies)
-        value_loss = criterion_value(value_outputs.squeeze(), values)
+        value_loss = criterion_value(value_outputs.squeeze(), rewards)
         loss = local_config['POLICY_LOSS_WEIGHT'] * policy_loss + local_config['VALUE_LOSS_WEIGHT'] * value_loss
 
         weighted_loss = loss * is_weights.mean()
@@ -259,12 +263,6 @@ def train_model():
         losses.append(loss.item())
         policy_losses.append(policy_loss.item())
         value_losses.append(value_loss.item())
-
-        # Update priorities in the replay buffer
-        with torch.no_grad():
-            td_errors = np.abs(values.cpu().numpy() - value_outputs.cpu().numpy().squeeze()) + \
-                        np.sum(np.abs(policies.cpu().numpy() - policy_outputs.cpu().numpy()), axis=1)
-        replay_buffer.update_priorities(indices, td_errors)
 
         if epoch == 1 or epoch % local_config['CHECKPOINT_INTERVAL'] == 0:
             checkpoint_epoch = epoch
@@ -320,4 +318,3 @@ if __name__ == "__main__":
         log_message("CUDA device not found. Please check your CUDA installation.")
     mp.set_start_method('spawn')
     train_model()
-
