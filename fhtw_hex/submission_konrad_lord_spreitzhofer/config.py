@@ -3,7 +3,7 @@ BOARD_SIZE = 3
 #MCTS
 EPOCHS = 100
 NUM_OF_GAMES_PER_EPOCH = 5
-MCTS_SIMULATIONS = 10
+MCTS_SIMULATIONS = 5
 TEMPERATURE_START = 1.0
 TEMPERATURE_END = 0.1
 EPSILON_START = 0.3  # Startvalue for epsilon-greedy strategie
@@ -37,6 +37,6 @@ NUM_PARALLEL_THREADS = 12 # Number of parallel threads to use (adjust based on C
 
 
 
-MODEL = 'fhtw_hex/submission_konrad_lord_spreitzhofer/models/4x4_v1/best_loss/best_hex_model.pth'  # enter the folder to test
+MODEL = 'fhtw_hex/submission_konrad_lord_spreitzhofer/models/2024-06-15-14-34-49/best_loss/best_hex_model.pth'  # enter the folder to test
 
 

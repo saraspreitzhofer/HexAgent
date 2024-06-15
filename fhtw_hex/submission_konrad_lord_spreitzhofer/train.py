@@ -45,9 +45,8 @@ def play_game(mcts: MCTS, board_size: int, opponent='self', move_penalty=0.01):
     elif game.winner == -1:
         player1_reward = -(1 - (move_penalty * move_count))
         player2_reward = 1 - (move_penalty * move_count)
-
+    print(f"Move count: {move_count}")
     return state_history, player1_reward, player2_reward
-
 
 def play_game_worker(args):
     model_state_dict, board_size, opponent, device, epsilon, temperature = args
@@ -147,6 +146,7 @@ def validate_against_checkpoints(model, board_size, num_games=10, model_folder='
                     total_moves += move_count
             win_rates.append(wins / num_games)
             move_rates.append(total_moves / num_games)
+    print(f"Win rate for checkpoint {checkpoint}: {wins / num_games}")
 
     return win_rates, move_rates
 
@@ -159,6 +159,7 @@ def compute_td_error(state, policy, value, model, device):
     value_pred = value_pred.cpu().numpy().flatten()[0]
     td_error = np.abs(value - value_pred) + np.sum(np.abs(policy - policy_pred))
     return td_error
+
 
 def train_model():
     local_config = deepcopy(config)
@@ -192,8 +193,7 @@ def train_model():
 
     criterion_policy = nn.KLDivLoss(reduction='batchmean')
     criterion_value = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=local_config['WARMUP_LEARNING_RATE'],
-                           weight_decay=local_config['WEIGHT_DECAY'])
+    optimizer = optim.Adam(model.parameters(), lr=local_config['WARMUP_LEARNING_RATE'], weight_decay=local_config['WEIGHT_DECAY'])
     scheduler = StepLR(optimizer, local_config['STEP_SIZE'], gamma=local_config['GAMMA'])
     model.to(device)
 
