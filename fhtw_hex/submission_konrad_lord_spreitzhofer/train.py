@@ -45,7 +45,7 @@ def play_game(mcts: MCTS, board_size: int, opponent='self', move_penalty=0.01):
     elif game.winner == -1:
         player1_reward = -(1 - (move_penalty * move_count))
         player2_reward = 1 - (move_penalty * move_count)
-    print(f"Move count: {move_count}")
+
     return state_history, player1_reward, player2_reward
 
 def play_game_worker(args):
@@ -146,7 +146,7 @@ def validate_against_checkpoints(model, board_size, num_games=10, model_folder='
                     total_moves += move_count
             win_rates.append(wins / num_games)
             move_rates.append(total_moves / num_games)
-    print(f"Win rate for checkpoint {checkpoint}: {wins / num_games}")
+
 
     return win_rates, move_rates
 
