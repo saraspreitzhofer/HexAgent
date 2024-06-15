@@ -1,12 +1,12 @@
 BOARD_SIZE = 3
 
 #MCTS
-EPOCHS = 15
-NUM_OF_GAMES_PER_EPOCH = 5
-MCTS_SIMULATIONS = 10
+EPOCHS = 40
+NUM_OF_GAMES_PER_EPOCH = 10
+MCTS_SIMULATIONS = 50
 TEMPERATURE_START = 1.0
 TEMPERATURE_END = 0.1
-EPSILON_START = 0.35  # Startvalue for epsilon-greedy strategie
+EPSILON_START = 0.3  # Startvalue for epsilon-greedy strategie
 EPSILON_END = 0.08    # Endvalue  for epsilon-greedy strategie
 
 
@@ -27,7 +27,7 @@ RANDOM_EPOCHS = 20            # How many epochs do we start to train against ran
 EVALUATION_INTERVAL = 5         # In which epochs do we evaluate
 CHECKPOINT_INTERVAL = 20           # When to save an Agent as opponent
 NUM_OF_GAMES_PER_CHECKPOINT = 15   # How many games do we play to evaluate
-NUM_OF_AGENTS = 2                  # Number of agents to save (excluded Random Agent)
+NUM_OF_AGENTS = 1                  # Number of agents to save (excluded Random Agent)
 
 
 REPLAY_BUFFER_CAPACITY = 120000    # Saving and using moves from past

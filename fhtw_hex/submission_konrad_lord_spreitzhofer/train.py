@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from copy import deepcopy
 from fhtw_hex import hex_engine as engine
 from fhtw_hex.submission_konrad_lord_spreitzhofer import config as base_config
-from fhtw_hex.submission_konrad_lord_spreitzhofer.facade import create_model, MCTS, RandomAgent, ReplayBuffer, log_message, save_log_to_file
+from fhtw_hex.submission_konrad_lord_spreitzhofer.facade import create_model, MCTS, RandomAgent, log_message, save_log_to_file, PrioritizedReplayBuffer
 from fhtw_hex.submission_konrad_lord_spreitzhofer.utils import load_checkpoint, save_checkpoint, save_config_to_file, save_results, setup_device
 import os
 from datetime import datetime
@@ -44,8 +44,6 @@ def play_game(mcts: MCTS, board_size: int, opponent='random'):
             break  # Ensure no more moves are made after the game ends
 
     return state_history, game.winner
-
-
 
 def play_game_worker(args):
     model_state_dict, board_size, opponent, device, epsilon, temperature = args
@@ -100,6 +98,9 @@ def play_validation(args):
                 chosen = player2.get_action(game.board, game.get_action_space())
         game.moove(chosen)
 
+        if game.winner != 0:
+            break  # Ensure no more moves are made after the game ends
+
     move_count = len(game.history)
     result = 1 if ((game.winner == 1 and starter == "current") or (game.winner == -1 and starter == "checkpoint")) else 0
     return result, move_count
@@ -145,6 +146,16 @@ def validate_against_checkpoints(model, board_size, num_games=10, model_folder='
 
     return win_rates, move_rates
 
+def compute_td_error(state, policy, value, model, device):
+    state_tensor = torch.tensor(np.array(state).reshape((1, 1, config['BOARD_SIZE'], config['BOARD_SIZE'])), dtype=torch.float32).to(device)
+    model.eval()
+    with torch.no_grad():
+        policy_pred, value_pred = model(state_tensor)
+    policy_pred = policy_pred.cpu().numpy().flatten()
+    value_pred = value_pred.cpu().numpy().flatten()[0]
+    td_error = np.abs(value - value_pred) + np.sum(np.abs(policy - policy_pred))
+    return td_error
+
 def train_model():
     local_config = deepcopy(config)
 
@@ -177,16 +188,19 @@ def train_model():
 
     criterion_policy = nn.KLDivLoss(reduction='batchmean')
     criterion_value = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=local_config['WARMUP_LEARNING_RATE'], weight_decay=local_config['WEIGHT_DECAY'])
+    optimizer = optim.Adam(model.parameters(), lr=local_config['WARMUP_LEARNING_RATE'],
+                           weight_decay=local_config['WEIGHT_DECAY'])
     scheduler = StepLR(optimizer, local_config['STEP_SIZE'], gamma=local_config['GAMMA'])
     model.to(device)
 
-    replay_buffer = ReplayBuffer(capacity=local_config['REPLAY_BUFFER_CAPACITY'])
+    replay_buffer = PrioritizedReplayBuffer(capacity=local_config['REPLAY_BUFFER_CAPACITY'])
 
     for epoch in range(1, local_config['EPOCHS'] + 1):
         log_message(f"Starting Epoch {epoch}/{local_config['EPOCHS']}")
         if epoch <= local_config['WARMUP_EPOCHS']:
-            lr = local_config['WARMUP_LEARNING_RATE'] + (local_config['LEARNING_RATE'] - local_config['WARMUP_LEARNING_RATE']) * (epoch / local_config['WARMUP_EPOCHS'])
+            lr = local_config['WARMUP_LEARNING_RATE'] + (
+                        local_config['LEARNING_RATE'] - local_config['WARMUP_LEARNING_RATE']) * (
+                             epoch / local_config['WARMUP_EPOCHS'])
             for param_group in optimizer.param_groups:
                 param_group['lr'] = lr
         elif epoch == local_config['WARMUP_EPOCHS'] + 1:
@@ -194,26 +208,31 @@ def train_model():
                 param_group['lr'] = local_config['LEARNING_RATE']
 
         # Adjust epsilon
-        epsilon_decay_rate = np.log(local_config['EPSILON_END'] / local_config['EPSILON_START']) / local_config['EPOCHS']
+        epsilon_decay_rate = np.log(local_config['EPSILON_END'] / local_config['EPSILON_START']) / local_config[
+            'EPOCHS']
         epsilon = local_config['EPSILON_START'] * np.exp(epsilon_decay_rate * epoch)
 
         # Adjust temperature
-        temperature_decay_rate = np.log(local_config['TEMPERATURE_END'] / local_config['TEMPERATURE_START']) / local_config['EPOCHS']
+        temperature_decay_rate = np.log(local_config['TEMPERATURE_END'] / local_config['TEMPERATURE_START']) / \
+                                 local_config['EPOCHS']
         temperature = local_config['TEMPERATURE_START'] * np.exp(temperature_decay_rate * epoch)
 
         results = play_games(model, local_config['BOARD_SIZE'], local_config['NUM_OF_GAMES_PER_EPOCH'],
-                             opponent='self' if epoch > local_config['RANDOM_EPOCHS'] else 'random', epsilon=epsilon, temperature=temperature)
+                             opponent='self' if epoch > local_config['RANDOM_EPOCHS'] else 'random', epsilon=epsilon,
+                             temperature=temperature)
 
         for state_history, result in results:
             for state in state_history:
                 policies = np.random.dirichlet(np.ones(local_config['BOARD_SIZE'] * local_config['BOARD_SIZE']))
-                replay_buffer.add((state, policies, result))
+                td_error = compute_td_error(state, policies, result, model, device)
+                replay_buffer.add((state, policies, result), td_error)
 
         if len(replay_buffer) < local_config['BATCH_SIZE']:
             log_message("Not enough samples in replay buffer. Skipping training.")
             continue
 
-        states, policies, values = zip(*replay_buffer.sample(local_config['BATCH_SIZE']))
+        indices, experiences, is_weights = replay_buffer.sample(local_config['BATCH_SIZE'])
+        states, policies, values = zip(*experiences)
 
         states = np.array(states).reshape((-1, 1, local_config['BOARD_SIZE'], local_config['BOARD_SIZE']))
         policies = np.array(policies)
@@ -222,6 +241,7 @@ def train_model():
         states = torch.tensor(states, dtype=torch.float32).to(device)
         policies = torch.tensor(policies, dtype=torch.float32).to(device)
         values = torch.tensor(values, dtype=torch.float32).to(device)
+        is_weights = torch.tensor(is_weights, dtype=torch.float32).to(device)
 
         model.train()
         optimizer.zero_grad()
@@ -231,13 +251,20 @@ def train_model():
         value_loss = criterion_value(value_outputs.squeeze(), values)
         loss = local_config['POLICY_LOSS_WEIGHT'] * policy_loss + local_config['VALUE_LOSS_WEIGHT'] * value_loss
 
-        loss.backward()
+        weighted_loss = loss * is_weights.mean()
+        weighted_loss.backward()
         optimizer.step()
         scheduler.step()
 
         losses.append(loss.item())
         policy_losses.append(policy_loss.item())
         value_losses.append(value_loss.item())
+
+        # Update priorities in the replay buffer
+        with torch.no_grad():
+            td_errors = np.abs(values.cpu().numpy() - value_outputs.cpu().numpy().squeeze()) + \
+                        np.sum(np.abs(policies.cpu().numpy() - policy_outputs.cpu().numpy()), axis=1)
+        replay_buffer.update_priorities(indices, td_errors)
 
         if epoch == 1 or epoch % local_config['CHECKPOINT_INTERVAL'] == 0:
             checkpoint_epoch = epoch
@@ -247,12 +274,14 @@ def train_model():
         win_rates_checkpoint, avg_moves_checkpoint = [], []
         if epoch % local_config['EVALUATION_INTERVAL'] == 0 or epoch == local_config['EPOCHS']:
             checkpoints = [random_agent_checkpoint_path] + [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar')
-                                                            for e in range(local_config['CHECKPOINT_INTERVAL'], epoch + 1,
-                                                                           local_config['CHECKPOINT_INTERVAL'])]
+                                                            for e in
+                                                            range(local_config['CHECKPOINT_INTERVAL'], epoch + 1,
+                                                                  local_config['CHECKPOINT_INTERVAL'])]
             checkpoints = checkpoints[:local_config['NUM_OF_AGENTS'] + 1]
             log_message(f"Evaluating against checkpoints: {checkpoints}")
             win_rates_checkpoint, avg_moves_checkpoint = validate_against_checkpoints(model, local_config['BOARD_SIZE'],
-                                                                                      num_games=local_config['NUM_OF_GAMES_PER_CHECKPOINT'],
+                                                                                      num_games=local_config[
+                                                                                          'NUM_OF_GAMES_PER_CHECKPOINT'],
                                                                                       model_folder=model_folder,
                                                                                       checkpoints=checkpoints)
             for i, (wr, am) in enumerate(zip(win_rates_checkpoint, avg_moves_checkpoint)):
@@ -260,10 +289,13 @@ def train_model():
                 avg_moves[i].append(am)
 
         total_loss = policy_loss.item() + value_loss.item()
-        log_message(f"Completed Epoch {epoch}/{local_config['EPOCHS']} with Loss: {total_loss}, Policy Loss: {policy_loss.item()}, Value Loss: {value_loss.item()}")
-        log_message(f"Random_Agent: Win Rates: {win_rates[0][-1] if win_rates[0] else 'N/A'}, Avg. Moves: {avg_moves[0][-1] if avg_moves[0] else 'N/A'}")
+        log_message(
+            f"Completed Epoch {epoch}/{local_config['EPOCHS']} with Loss: {total_loss}, Policy Loss: {policy_loss.item()}, Value Loss: {value_loss.item()}")
+        log_message(
+            f"Random_Agent: Win Rates: {win_rates[0][-1] if win_rates[0] else 'N/A'}, Avg. Moves: {avg_moves[0][-1] if avg_moves[0] else 'N/A'}")
         for i in range(1, len(win_rates)):
-            log_message(f"Agent_Checkpoint_Epoch_{i * local_config['CHECKPOINT_INTERVAL']}: Win Rates: {win_rates[i][-1] if win_rates[i] else 'N/A'}, Avg. Moves: {avg_moves[i][-1] if avg_moves[i] else 'N/A'}")
+            log_message(
+                f"Agent_Checkpoint_Epoch_{i * local_config['CHECKPOINT_INTERVAL']}: Win Rates: {win_rates[i][-1] if win_rates[i] else 'N/A'}, Avg. Moves: {avg_moves[i][-1] if avg_moves[i] else 'N/A'}")
 
         if loss.item() < best_loss:
             best_loss = loss.item()
@@ -278,6 +310,7 @@ def train_model():
     log_path = os.path.join(model_folder, 'train.log')
     save_log_to_file(log_path)
     log_message(f"Logfile created at {log_path}")
+
 
 if __name__ == "__main__":
     log_message("CUDA available: " + str(torch.cuda.is_available()))

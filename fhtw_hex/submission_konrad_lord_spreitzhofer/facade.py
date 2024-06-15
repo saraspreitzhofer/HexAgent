@@ -8,7 +8,7 @@ import random
 from copy import deepcopy
 from fhtw_hex import hex_engine as engine
 from fhtw_hex.submission_konrad_lord_spreitzhofer import config
-#
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class Node:
@@ -87,7 +87,7 @@ class HexNet(nn.Module):
         self.board_size = board_size
         self.conv1 = nn.Conv2d(1, 128, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(128)
-        self.residual_blocks = nn.ModuleList([ResidualBlock(128) for _ in range(6)])  # 3 Residual Blöcke
+        self.residual_blocks = nn.ModuleList([ResidualBlock(128) for _ in range(6)])  # 3 Residual Blocks
         self.flatten = nn.Flatten()
         self.policy_head = nn.Linear(128 * board_size * board_size, board_size * board_size)
         self.value_head = nn.Linear(128 * board_size * board_size, 1)
@@ -142,18 +142,44 @@ class MCTS:
         with torch.no_grad():
             policy, value = self.model(board)
         policy = np.exp(policy.cpu().numpy()[0] / self.temperature)
-        policy = policy / np.sum(policy)
+
+        # Check to prevent division by zero
+        policy_sum = np.sum(policy)
+        if policy_sum == 0:
+            policy = np.ones_like(policy) / len(policy)
+        else:
+            policy = policy / policy_sum
+
         return policy, value.cpu().numpy()[0][0]
 
-class ReplayBuffer:
-    def __init__(self, capacity):
+class PrioritizedReplayBuffer:
+    def __init__(self, capacity, alpha=0.6):
+        self.capacity = capacity
+        self.alpha = alpha
         self.buffer = deque(maxlen=capacity)
+        self.priorities = deque(maxlen=capacity)
 
-    def add(self, experience):
+    def add(self, experience, td_error):
+        priority = (abs(td_error) + 1e-5) ** self.alpha
         self.buffer.append(experience)
+        self.priorities.append(priority)
 
-    def sample(self, batch_size):
-        return random.sample(self.buffer, batch_size)
+    def sample(self, batch_size, beta=0.4):
+        priorities = np.array(self.priorities, dtype=np.float32)
+        probabilities = priorities / priorities.sum()
+        indices = np.random.choice(len(self.buffer), batch_size, p=probabilities)
+        samples = [self.buffer[idx] for idx in indices]
+
+        total = len(self.buffer)
+        weights = (total * probabilities[indices]) ** (-beta)
+        weights /= weights.max()
+        weights = np.array(weights, dtype=np.float32)
+
+        return indices, samples, weights
+
+    def update_priorities(self, batch_indices, td_errors):
+        for idx, td_error in zip(batch_indices, td_errors):
+            self.priorities[idx] = (abs(td_error) + 1e-5) ** self.alpha
 
     def __len__(self):
         return len(self.buffer)
