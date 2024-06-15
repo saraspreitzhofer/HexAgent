@@ -1,7 +1,7 @@
 BOARD_SIZE = 3
 
 #MCTS
-EPOCHS = 100
+EPOCHS = 10
 NUM_OF_GAMES_PER_EPOCH = 5
 MCTS_SIMULATIONS = 5
 TEMPERATURE_START = 1.0
@@ -25,14 +25,14 @@ RANDOM_EPOCHS = 20            # How many epochs do we start to train against ran
 #Evaluation
 
 EVALUATION_INTERVAL = 5         # In which epochs do we evaluate
-CHECKPOINT_INTERVAL = 20           # When to save an Agent as opponent
-NUM_OF_GAMES_PER_CHECKPOINT = 15   # How many games do we play to evaluate
-NUM_OF_AGENTS = 1                  # Number of agents to save (excluded Random Agent)
+CHECKPOINT_INTERVAL = 5          # When to save an Agent as opponent
+NUM_OF_GAMES_PER_CHECKPOINT = 20   # How many games do we play to evaluate
+NUM_OF_AGENTS = 1# Number of agents to save (excluded Random Agent)
 
 
-REPLAY_BUFFER_CAPACITY = 120000    # Saving and using moves from past
+REPLAY_BUFFER_CAPACITY = 100000    # Saving and using moves from past
 PARALLEL_GAMES = True # Set to True to parallelize games in training
-NUM_PARALLEL_THREADS = 12 # Number of parallel threads to use (adjust based on CPU)
+NUM_PARALLEL_THREADS = 10 # Number of parallel threads to use (adjust based on CPU)
                          # if number is higher than avaiable threads than max threads will be used
 
 

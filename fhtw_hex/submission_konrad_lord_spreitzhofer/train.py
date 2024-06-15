@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from copy import deepcopy
 from fhtw_hex import hex_engine as engine
 from fhtw_hex.submission_konrad_lord_spreitzhofer import config as base_config
-from fhtw_hex.submission_konrad_lord_spreitzhofer.facade import create_model, MCTS, RandomAgent, log_message, save_log_to_file, PrioritizedReplayBuffer
+from fhtw_hex.submission_konrad_lord_spreitzhofer.facade import create_model, MCTS, RandomAgent, log_message, save_log_to_file, SumTree, PrioritizedReplayBuffer
 from fhtw_hex.submission_konrad_lord_spreitzhofer.utils import load_checkpoint, save_checkpoint, save_config_to_file, save_results, setup_device
 import os
 from datetime import datetime
@@ -104,7 +104,7 @@ def play_validation(args):
         if game.winner != 0:
             break  # Ensure no more moves are made after the game ends
 
-    move_count = len(game.history)
+    move_count = len(game.history)-1
     result = 1 if ((game.winner == 1 and starter == "current") or (game.winner == -1 and starter == "checkpoint")) else 0
     return result, move_count
 
@@ -144,9 +144,12 @@ def validate_against_checkpoints(model, board_size, num_games=10, model_folder='
                     win_result, move_count = play_validation(args)
                     wins += win_result
                     total_moves += move_count
-            win_rates.append(wins / num_games)
-            move_rates.append(total_moves / num_games)
 
+            avg_moves = total_moves / num_games
+            if avg_moves > board_size * board_size:
+                log_message(f"Warning: Average moves ({avg_moves}) exceed the maximum possible moves ({board_size * board_size}). There might be an issue.")
+            win_rates.append(wins / num_games)
+            move_rates.append(avg_moves)
 
     return win_rates, move_rates
 
@@ -159,7 +162,6 @@ def compute_td_error(state, policy, value, model, device):
     value_pred = value_pred.cpu().numpy().flatten()[0]
     td_error = np.abs(value - value_pred) + np.sum(np.abs(policy - policy_pred))
     return td_error
-
 
 def train_model():
     local_config = deepcopy(config)
@@ -212,17 +214,14 @@ def train_model():
                 param_group['lr'] = local_config['LEARNING_RATE']
 
         # Adjust epsilon
-        epsilon_decay_rate = np.log(local_config['EPSILON_END'] / local_config['EPSILON_START']) / local_config[
-            'EPOCHS']
+        epsilon_decay_rate = np.log(local_config['EPSILON_END'] / local_config['EPSILON_START']) / local_config['EPOCHS']
         epsilon = local_config['EPSILON_START'] * np.exp(epsilon_decay_rate * epoch)
 
         # Adjust temperature
-        temperature_decay_rate = np.log(local_config['TEMPERATURE_END'] / local_config['TEMPERATURE_START']) / \
-                                 local_config['EPOCHS']
+        temperature_decay_rate = np.log(local_config['TEMPERATURE_END'] / local_config['TEMPERATURE_START']) / local_config['EPOCHS']
         temperature = local_config['TEMPERATURE_START'] * np.exp(temperature_decay_rate * epoch)
 
-        results = play_games(model, local_config['BOARD_SIZE'], local_config['NUM_OF_GAMES_PER_EPOCH'],
-                             opponent='self', epsilon=epsilon, temperature=temperature)
+        results = play_games(model, local_config['BOARD_SIZE'], local_config['NUM_OF_GAMES_PER_EPOCH'], opponent='self', epsilon=epsilon, temperature=temperature)
 
         for state_history, player1_reward, player2_reward in results:
             for state, player in state_history:
@@ -266,34 +265,23 @@ def train_model():
 
         if epoch == 1 or epoch % local_config['CHECKPOINT_INTERVAL'] == 0:
             checkpoint_epoch = epoch
-            save_checkpoint(model, optimizer, checkpoint_epoch, model_folder,
-                            filename=f'checkpoint_epoch_{checkpoint_epoch}.pth.tar')
+            save_checkpoint(model, optimizer, checkpoint_epoch, model_folder, filename=f'checkpoint_epoch_{checkpoint_epoch}.pth.tar')
 
         win_rates_checkpoint, avg_moves_checkpoint = [], []
         if epoch % local_config['EVALUATION_INTERVAL'] == 0 or epoch == local_config['EPOCHS']:
-            checkpoints = [random_agent_checkpoint_path] + [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar')
-                                                            for e in
-                                                            range(local_config['CHECKPOINT_INTERVAL'], epoch + 1,
-                                                                  local_config['CHECKPOINT_INTERVAL'])]
+            checkpoints = [random_agent_checkpoint_path] + [os.path.join(model_folder, f'checkpoint_epoch_{e}.pth.tar') for e in range(local_config['CHECKPOINT_INTERVAL'], epoch + 1, local_config['CHECKPOINT_INTERVAL'])]
             checkpoints = checkpoints[:local_config['NUM_OF_AGENTS'] + 1]
             log_message(f"Evaluating against checkpoints: {checkpoints}")
-            win_rates_checkpoint, avg_moves_checkpoint = validate_against_checkpoints(model, local_config['BOARD_SIZE'],
-                                                                                      num_games=local_config[
-                                                                                          'NUM_OF_GAMES_PER_CHECKPOINT'],
-                                                                                      model_folder=model_folder,
-                                                                                      checkpoints=checkpoints)
+            win_rates_checkpoint, avg_moves_checkpoint = validate_against_checkpoints(model, local_config['BOARD_SIZE'], num_games=local_config['NUM_OF_GAMES_PER_CHECKPOINT'], model_folder=model_folder, checkpoints=checkpoints)
             for i, (wr, am) in enumerate(zip(win_rates_checkpoint, avg_moves_checkpoint)):
                 win_rates[i].append(wr)
                 avg_moves[i].append(am)
 
         total_loss = policy_loss.item() + value_loss.item()
-        log_message(
-            f"Completed Epoch {epoch}/{local_config['EPOCHS']} with Loss: {total_loss}, Policy Loss: {policy_loss.item()}, Value Loss: {value_loss.item()}")
-        log_message(
-            f"Random_Agent: Win Rates: {win_rates[0][-1] if win_rates[0] else 'N/A'}, Avg. Moves: {avg_moves[0][-1] if avg_moves[0] else 'N/A'}")
+        log_message(f"Completed Epoch {epoch}/{local_config['EPOCHS']} with Loss: {total_loss}, Policy Loss: {policy_loss.item()}, Value Loss: {value_loss.item()}")
+        log_message(f"Random_Agent: Win Rates: {win_rates[0][-1] if win_rates[0] else 'N/A'}, Avg. Moves: {avg_moves[0][-1] if avg_moves[0] else 'N/A'}")
         for i in range(1, len(win_rates)):
-            log_message(
-                f"Agent_Checkpoint_Epoch_{i * local_config['CHECKPOINT_INTERVAL']}: Win Rates: {win_rates[i][-1] if win_rates[i] else 'N/A'}, Avg. Moves: {avg_moves[i][-1] if avg_moves[i] else 'N/A'}")
+            log_message(f"Agent_Checkpoint_Epoch_{i * local_config['CHECKPOINT_INTERVAL']}: Win Rates: {win_rates[i][-1] if win_rates[i] else 'N/A'}, Avg. Moves: {avg_moves[i][-1] if avg_moves[i] else 'N/A'}")
 
         if loss.item() < best_loss:
             best_loss = loss.item()

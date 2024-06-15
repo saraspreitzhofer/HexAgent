@@ -11,6 +11,7 @@ from fhtw_hex.submission_konrad_lord_spreitzhofer import config
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+
 class Node:
     hex_position_class = engine.HexPosition
 
@@ -65,6 +66,7 @@ class Node:
             np.log(self.parent.visit_count + 1) / (self.visit_count + epsilon))
         return exploitation + exploration
 
+
 class ResidualBlock(nn.Module):
     def __init__(self, channels):
         super(ResidualBlock, self).__init__()
@@ -81,13 +83,26 @@ class ResidualBlock(nn.Module):
         out = F.relu(out)
         return out
 
+
 class HexNet(nn.Module):
     def __init__(self, board_size):
         super(HexNet, self).__init__()
         self.board_size = board_size
         self.conv1 = nn.Conv2d(1, 128, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(128)
-        self.residual_blocks = nn.ModuleList([ResidualBlock(128) for _ in range(6)])  # 3 Residual Blocks
+        # Set the number of residual blocks based on the board size
+        if board_size == 3:
+            num_blocks = 3
+        elif board_size == 4:
+            num_blocks = 4
+        elif board_size == 5:
+            num_blocks = 5
+        elif board_size == 7:
+            num_blocks = 6
+        else:
+            num_blocks = 5  # Default
+
+        self.residual_blocks = nn.ModuleList([ResidualBlock(128) for _ in range(num_blocks)])
         self.flatten = nn.Flatten()
         self.policy_head = nn.Linear(128 * board_size * board_size, board_size * board_size)
         self.value_head = nn.Linear(128 * board_size * board_size, 1)
@@ -101,12 +116,15 @@ class HexNet(nn.Module):
         value = torch.tanh(self.value_head(x))
         return policy, value
 
+
 def create_model(board_size):
     model = HexNet(board_size).to(device)
     return model
 
+
 class MCTS:
-    def __init__(self, model, simulations=config.MCTS_SIMULATIONS, device=device, epsilon=config.EPSILON_START, temperature=config.TEMPERATURE_START, board_size=config.BOARD_SIZE):
+    def __init__(self, model, simulations=config.MCTS_SIMULATIONS, device=device, epsilon=config.EPSILON_START,
+                 temperature=config.TEMPERATURE_START, board_size=config.BOARD_SIZE):
         self.model = model
         self.simulations = simulations
         self.device = device
@@ -152,52 +170,114 @@ class MCTS:
 
         return policy, value.cpu().numpy()[0][0]
 
+
+class SumTree:
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.tree = np.zeros(2 * capacity - 1)
+        self.data = np.zeros(capacity, dtype=object)
+        self.write = 0
+        self.n_entries = 0
+
+    def _propagate(self, idx, change):
+        parent = (idx - 1) // 2
+        self.tree[parent] += change
+        if parent != 0:
+            self._propagate(parent, change)
+
+    def _retrieve(self, idx, s):
+        left = 2 * idx + 1
+        right = left + 1
+        if left >= len(self.tree):
+            return idx
+        if s <= self.tree[left]:
+            return self._retrieve(left, s)
+        else:
+            return self._retrieve(right, s - self.tree[left])
+
+    def total(self):
+        return self.tree[0]
+
+    def add(self, p, data):
+        idx = self.write + self.capacity - 1
+        self.data[self.write] = data
+        self.update(idx, p)
+        self.write += 1
+        if self.write >= self.capacity:
+            self.write = 0
+        if self.n_entries < self.capacity:
+            self.n_entries += 1
+
+    def update(self, idx, p):
+        change = p - self.tree[idx]
+        self.tree[idx] = p
+        self._propagate(idx, change)
+
+    def get(self, s):
+        idx = self._retrieve(0, s)
+        data_idx = idx - self.capacity + 1
+        return idx, self.tree[idx], self.data[data_idx]
+
+    def __len__(self):
+        return self.n_entries
+
+
 class PrioritizedReplayBuffer:
     def __init__(self, capacity, alpha=0.6):
-        self.capacity = capacity
+        self.tree = SumTree(capacity)
         self.alpha = alpha
-        self.buffer = deque(maxlen=capacity)
-        self.priorities = deque(maxlen=capacity)
+        self.epsilon = 1e-5
 
     def add(self, experience, td_error):
-        priority = (abs(td_error) + 1e-5) ** self.alpha
-        self.buffer.append(experience)
-        self.priorities.append(priority)
+        priority = (abs(td_error) + self.epsilon) ** self.alpha
+        self.tree.add(priority, experience)
 
     def sample(self, batch_size, beta=0.4):
-        priorities = np.array(self.priorities, dtype=np.float32)
-        probabilities = priorities / priorities.sum()
-        indices = np.random.choice(len(self.buffer), batch_size, p=probabilities)
-        samples = [self.buffer[idx] for idx in indices]
+        indices = []
+        experiences = []
+        weights = []
+        total = self.tree.total()
+        segment = total / batch_size
 
-        total = len(self.buffer)
-        weights = (total * probabilities[indices]) ** (-beta)
-        weights /= weights.max()
+        for i in range(batch_size):
+            s = random.uniform(segment * i, segment * (i + 1))
+            idx, priority, experience = self.tree.get(s)
+            indices.append(idx)
+            experiences.append(experience)
+            probability = priority / total
+            weights.append((self.tree.n_entries * probability) ** (-beta))
+
         weights = np.array(weights, dtype=np.float32)
-
-        return indices, samples, weights
+        weights /= weights.max()
+        return indices, experiences, weights
 
     def update_priorities(self, batch_indices, td_errors):
         for idx, td_error in zip(batch_indices, td_errors):
-            self.priorities[idx] = (abs(td_error) + 1e-5) ** self.alpha
+            priority = (abs(td_error) + self.epsilon) ** self.alpha
+            self.tree.update(idx, priority)
 
     def __len__(self):
-        return len(self.buffer)
+        return len(self.tree)
+
 
 class RandomAgent:
     def get_action(self, board, action_space):
         return random.choice(action_space)
 
+
 def log_message(message):
     print(message)
     log_buffer.append(message)
 
+
 log_buffer = []
+
 
 def save_log_to_file(log_path):
     with open(log_path, 'w') as f:
         for message in log_buffer:
             f.write(message + '\n')
+
 
 def agent(board, action_set):
     board_size = config.BOARD_SIZE
