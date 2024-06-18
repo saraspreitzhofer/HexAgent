@@ -11,7 +11,6 @@ from fhtw_hex.submission_konrad_lord_spreitzhofer import config
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
 class Node:
     hex_position_class = engine.HexPosition
 
@@ -66,26 +65,26 @@ class Node:
             np.log(self.parent.visit_count + 1) / (self.visit_count + epsilon))
         return exploitation + exploration
 
-
 class ResidualBlock(nn.Module):
-    def __init__(self, channels):
+    def __init__(self, channels, dropout_rate=0.2):
         super(ResidualBlock, self).__init__()
         self.conv1 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(channels)
         self.conv2 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
         self.bn2 = nn.BatchNorm2d(channels)
+        self.dropout = nn.Dropout(dropout_rate)
 
     def forward(self, x):
         residual = x
         out = F.relu(self.bn1(self.conv1(x)))
+        out = self.dropout(out)
         out = self.bn2(self.conv2(out))
         out += residual
         out = F.relu(out)
         return out
 
-
 class HexNet(nn.Module):
-    def __init__(self, board_size):
+    def __init__(self, board_size, dropout_rate=0.2):
         super(HexNet, self).__init__()
         self.board_size = board_size
         self.conv1 = nn.Conv2d(1, 128, kernel_size=3, padding=1)
@@ -102,7 +101,7 @@ class HexNet(nn.Module):
         else:
             num_blocks = 5  # Default
 
-        self.residual_blocks = nn.ModuleList([ResidualBlock(128) for _ in range(num_blocks)])
+        self.residual_blocks = nn.ModuleList([ResidualBlock(128, dropout_rate) for _ in range(num_blocks)])
         self.flatten = nn.Flatten()
         self.policy_head = nn.Linear(128 * board_size * board_size, board_size * board_size)
         self.value_head = nn.Linear(128 * board_size * board_size, 1)
@@ -116,11 +115,9 @@ class HexNet(nn.Module):
         value = torch.tanh(self.value_head(x))
         return policy, value
 
-
-def create_model(board_size):
-    model = HexNet(board_size).to(device)
+def create_model(board_size, dropout_rate=0.2):
+    model = HexNet(board_size, dropout_rate).to(device)
     return model
-
 
 class MCTS:
     def __init__(self, model, simulations=config.MCTS_SIMULATIONS, device=device, epsilon=config.EPSILON_START,
@@ -169,7 +166,6 @@ class MCTS:
             policy = policy / policy_sum
 
         return policy, value.cpu().numpy()[0][0]
-
 
 class SumTree:
     def __init__(self, capacity):
@@ -221,7 +217,6 @@ class SumTree:
     def __len__(self):
         return self.n_entries
 
-
 class PrioritizedReplayBuffer:
     def __init__(self, capacity, alpha=0.6):
         self.tree = SumTree(capacity)
@@ -259,25 +254,20 @@ class PrioritizedReplayBuffer:
     def __len__(self):
         return len(self.tree)
 
-
 class RandomAgent:
     def get_action(self, board, action_space):
         return random.choice(action_space)
-
 
 def log_message(message):
     print(message)
     log_buffer.append(message)
 
-
 log_buffer = []
-
 
 def save_log_to_file(log_path):
     with open(log_path, 'w') as f:
         for message in log_buffer:
             f.write(message + '\n')
-
 
 def agent(board, action_set):
     board_size = config.BOARD_SIZE

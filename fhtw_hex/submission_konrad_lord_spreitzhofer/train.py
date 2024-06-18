@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.optim.lr_scheduler import StepLR
+from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau
 import torch.nn.functional as F
 from copy import deepcopy
 from fhtw_hex import hex_engine as engine
@@ -39,12 +39,15 @@ def play_game(mcts: MCTS, board_size: int, opponent='self', move_penalty=0.01):
             break
 
     # Calculate rewards
+    max_moves = board_size * board_size
+    normalized_move_penalty = move_penalty / max_moves
+
     if game.winner == 1:
-        player1_reward = 1 - (move_penalty * move_count)
-        player2_reward = -(1 - (move_penalty * move_count))
+        player1_reward = 1 - (normalized_move_penalty * move_count)
+        player2_reward = -(1 - (normalized_move_penalty * move_count))
     elif game.winner == -1:
-        player1_reward = -(1 - (move_penalty * move_count))
-        player2_reward = 1 - (move_penalty * move_count)
+        player1_reward = -(1 - (normalized_move_penalty * move_count))
+        player2_reward = 1 - (normalized_move_penalty * move_count)
 
     return state_history, player1_reward, player2_reward
 
@@ -196,7 +199,7 @@ def train_model():
     criterion_policy = nn.KLDivLoss(reduction='batchmean')
     criterion_value = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=local_config['WARMUP_LEARNING_RATE'], weight_decay=local_config['WEIGHT_DECAY'])
-    scheduler = StepLR(optimizer, local_config['STEP_SIZE'], gamma=local_config['GAMMA'])
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10)
     model.to(device)
 
     replay_buffer = PrioritizedReplayBuffer(capacity=local_config['REPLAY_BUFFER_CAPACITY'])
@@ -257,7 +260,7 @@ def train_model():
         weighted_loss = loss * is_weights.mean()
         weighted_loss.backward()
         optimizer.step()
-        scheduler.step()
+        scheduler.step(loss)
 
         losses.append(loss.item())
         policy_losses.append(policy_loss.item())
@@ -296,7 +299,6 @@ def train_model():
     log_path = os.path.join(model_folder, 'train.log')
     save_log_to_file(log_path)
     log_message(f"Logfile created at {log_path}")
-
 
 if __name__ == "__main__":
     log_message("CUDA available: " + str(torch.cuda.is_available()))

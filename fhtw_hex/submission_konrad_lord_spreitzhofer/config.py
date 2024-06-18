@@ -1,7 +1,7 @@
 BOARD_SIZE = 3
 
 #MCTS
-EPOCHS = 10
+EPOCHS = 15
 NUM_OF_GAMES_PER_EPOCH = 5
 MCTS_SIMULATIONS = 5
 TEMPERATURE_START = 1.0
@@ -11,7 +11,7 @@ EPSILON_END = 0.08    # Endvalue  for epsilon-greedy strategie
 
 
 #Neural Network
-POLICY_LOSS_WEIGHT = 1.0  # Initial weight for policy loss
+POLICY_LOSS_WEIGHT = 1.3  # Initial weight for policy loss
 VALUE_LOSS_WEIGHT = 1.0  # Initial weight for value loss
 LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 1e-3
@@ -37,6 +37,6 @@ NUM_PARALLEL_THREADS = 10 # Number of parallel threads to use (adjust based on C
 
 
 
-MODEL = 'fhtw_hex/submission_konrad_lord_spreitzhofer/models/2024-06-15-14-34-49/best_loss/best_hex_model.pth'  # enter the folder to test
+MODEL = 'fhtw_hex/submission_konrad_lord_spreitzhofer/models/hex3x3/best_loss/best_hex_model.pth'  # enter the folder to test
 
 
