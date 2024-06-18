@@ -198,7 +198,7 @@ def train_model():
 
     criterion_policy = nn.KLDivLoss(reduction='batchmean')
     criterion_value = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=local_config['WARMUP_LEARNING_RATE'], weight_decay=local_config['WEIGHT_DECAY'])
+    optimizer = optim.AdamW(model.parameters(), lr=local_config['WARMUP_LEARNING_RATE'], weight_decay=local_config['WEIGHT_DECAY'])
     scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10)
     model.to(device)
 
