@@ -15,7 +15,6 @@ POLICY_LOSS_WEIGHT = 1.3  # Initial weight for policy loss
 VALUE_LOSS_WEIGHT = 1.0  # Initial weight for value loss
 LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 1e-3
-STEP_SIZE = 5
 GAMMA = 0.90
 BATCH_SIZE = 32
 WARMUP_EPOCHS = 10           # Number of warm-up epochs
