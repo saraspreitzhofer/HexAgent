@@ -66,7 +66,7 @@ class Node:
         return exploitation + exploration
 
 class ResidualBlock(nn.Module):
-    def __init__(self, channels, dropout_rate=0.2):
+    def __init__(self, channels, dropout_rate=0.15):
         super(ResidualBlock, self).__init__()
         self.conv1 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(channels)
@@ -84,7 +84,7 @@ class ResidualBlock(nn.Module):
         return out
 
 class HexNet(nn.Module):
-    def __init__(self, board_size, dropout_rate=0.2):
+    def __init__(self, board_size, dropout_rate=0.15):
         super(HexNet, self).__init__()
         self.board_size = board_size
         self.conv1 = nn.Conv2d(1, 128, kernel_size=3, padding=1)
@@ -115,7 +115,7 @@ class HexNet(nn.Module):
         value = torch.tanh(self.value_head(x))
         return policy, value
 
-def create_model(board_size, dropout_rate=0.2):
+def create_model(board_size, dropout_rate=0.15):
     model = HexNet(board_size, dropout_rate).to(device)
     return model
 
