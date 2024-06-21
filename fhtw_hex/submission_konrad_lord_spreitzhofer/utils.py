@@ -67,8 +67,7 @@ def save_results(losses, win_rates, policy_losses, value_losses, path, avg_moves
 
         agent_epochs = list(range(start_epoch, start_epoch + len(win_rates[i]) * config['EVALUATION_INTERVAL'], config['EVALUATION_INTERVAL']))
         agent_win_rates = win_rates[i]
-        plt.plot(agent_epochs, agent_win_rates, label=f''
-                                                      f'{legend_name}')
+        plt.plot(agent_epochs, agent_win_rates, label=f'{legend_name}')
     plt.xlabel('Epochs')
     plt.ylabel('Win Rate')
     plt.legend()
