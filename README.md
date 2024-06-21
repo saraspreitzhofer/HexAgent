@@ -20,7 +20,7 @@ In `config.py`, you can adjust various parameters such as `BOARD_SIZE`, `MCTS_SI
 
 ## Training the Agent
 
-Once the configurations are set, you can start training the agent by running `train.py`. This script coordinates the training process, leveraging various modules and functions to create and optimize the Hex game agent. For more detailed information, please proceed to the next page.
+Once the configurations are set, you can start training the agent by running `train.py`. This script coordinates the training process, leveraging various modules and functions to create and optimize the Hex game agent.
 
 ## Module Overview
 
@@ -71,4 +71,4 @@ This module provides utility functions for saving and loading models, managing t
    - The agent is periodically evaluated against previous versions and random agents to ensure continuous improvement.
    - Win rates and average moves are recorded for analysis.
 
-For deeper insights please continue on the next page.
+
