@@ -57,4 +57,18 @@ This module provides utility functions for saving and loading models, managing t
 - **load_checkpoint**: Loads a model checkpoint for further training or evaluation.
 - **setup_device**: Sets up the device (CPU or GPU) for training.
 
-##
+## Summary of the Training Process
+
+1. **Configuration**: Adjust settings in `config.py` to define the training parameters.
+2. **Initialization**: Run `train.py` to start the training process.
+3. **Self-Play and Data Generation**:
+   - The agent plays games against a random agent (for a number of epochs configured in `config.py` by the parameter `RANDOM_EPOCHS`) and switches to self-play mode to generate training data.
+   - Game states, actions, and outcomes are stored in a prioritized replay buffer.
+4. **Model Training**:
+   - The neural network is trained using mini-batches of experiences from the replay buffer.
+   - The loss function combines policy loss and value loss, optimized using AdamW with a ReduceLROnPlateau scheduler.
+5. **Evaluation**:
+   - The agent is periodically evaluated against previous versions and random agents to ensure continuous improvement.
+   - Win rates and average moves are recorded for analysis.
+
+For deeper insights please continue on the next page.
