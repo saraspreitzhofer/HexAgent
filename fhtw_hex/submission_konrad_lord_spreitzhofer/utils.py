@@ -35,7 +35,7 @@ def save_results(losses, win_rates, policy_losses, value_losses, path, avg_moves
 
         agent_epochs = list(range(start_epoch, start_epoch + len(win_rates[i]) * config['EVALUATION_INTERVAL'], config['EVALUATION_INTERVAL']))
         agent_win_rates = win_rates[i]
-        plt.plot(agent_epochs, agent_win_rates, label=f'Win Rate against {legend_name}')
+        plt.plot(agent_epochs, agent_win_rates, label=f' {legend_name}')
         plt.xlabel('Epochs')
         plt.ylabel('Win Rate')
         plt.legend()
@@ -45,7 +45,7 @@ def save_results(losses, win_rates, policy_losses, value_losses, path, avg_moves
 
         agent_avg_moves = avg_moves[i]
         plt.figure()
-        plt.plot(agent_epochs, agent_avg_moves, label=f'Avg Moves against {legend_name}')
+        plt.plot(agent_epochs, agent_avg_moves, label=f'{legend_name}')
         plt.xlabel('Epochs')
         plt.ylabel('Avg Moves')
         plt.legend()
@@ -67,7 +67,7 @@ def save_results(losses, win_rates, policy_losses, value_losses, path, avg_moves
 
         agent_epochs = list(range(start_epoch, start_epoch + len(win_rates[i]) * config['EVALUATION_INTERVAL'], config['EVALUATION_INTERVAL']))
         agent_win_rates = win_rates[i]
-        plt.plot(agent_epochs, agent_win_rates, label=f'Win Rate against {legend_name}')
+        plt.plot(agent_epochs, agent_win_rates, label=f'{legend_name}')
     plt.xlabel('Epochs')
     plt.ylabel('Win Rate')
     plt.legend()
@@ -89,7 +89,7 @@ def save_results(losses, win_rates, policy_losses, value_losses, path, avg_moves
 
         agent_epochs = list(range(start_epoch, start_epoch + len(avg_moves[i]) * config['EVALUATION_INTERVAL'], config['EVALUATION_INTERVAL']))
         agent_avg_moves = avg_moves[i]
-        plt.plot(agent_epochs, agent_avg_moves, label=f'Avg Moves against {legend_name}')
+        plt.plot(agent_epochs, agent_avg_moves, label=f'{legend_name}')
         plt.xlabel('Epochs')
         plt.ylabel('Avg Moves')
         plt.legend()
