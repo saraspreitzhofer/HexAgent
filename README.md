@@ -12,7 +12,7 @@ Ensure that the following packages are installed:
 
 ## Watch or Play Against the Agent
 
-We have provided the functionality to watch the agent play or challenge the agent yourself across different board sizes (3x3, 4x4, 5x5, and 7x7). To do so, simply run `script.py`, select a board size from the terminal prompt, and enjoy the game. You can either watch the agent play against itself, against a random agent, or you can play against the agent yourself. Have fun!
+We have provided the functionality to watch the agent play or challenge the agent yourself across different board sizes (3x3, 4x4, 5x5, and 7x7). To do so, simply run `script.py`, select a board size (but also ensure it fits with `BOARD_SIZE` in `config.py`) from the terminal prompt, and enjoy the game. You can either watch the agent play against itself, against a random agent, or you can play against the agent yourself. Have fun!
 
 ## Configuration
 

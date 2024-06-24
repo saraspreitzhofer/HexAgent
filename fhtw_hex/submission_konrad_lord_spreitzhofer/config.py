@@ -1,4 +1,4 @@
-BOARD_SIZE = 7             # This needs to be adjusted for train.py and script.py (which agent one want to train or play)
+BOARD_SIZE = 3            # This needs to be adjusted for train.py and script.py (which agent one want to train or play)
 
 #MCTS
 EPOCHS =20
