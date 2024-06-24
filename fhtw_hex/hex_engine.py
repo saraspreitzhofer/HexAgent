@@ -24,7 +24,7 @@ class HexPosition(object):
         A list of board-state arrays. Stores the history of play.
     """
 
-    def __init__(self, size=config.BOARD_SIZE):  # todo change to 7 for the final submission
+    def __init__(self, size=config.BOARD_SIZE):
         # enforce lower and upper bound on size
         size = max(2, min(size, 26))
         # attributes encoding a game state

@@ -25,7 +25,7 @@ def trained_agent(board, action_set, mcts_agent):
 
 if __name__ == "__main__":
     available_boards = [3, 4, 5, 7]
-    board_size = int(input("Which boardsize do you want to play? Press 3, 4, 5 or 7: "))
+    board_size = int(input("Which boardsize do you want to play? (Make sure BOARD_SIZE in config.py is adjusted)\nPress 3, 4, 5 or 7: "))
 
     if board_size not in available_boards:
         print(f"Sorry, boardsize {board_size} is not available")
