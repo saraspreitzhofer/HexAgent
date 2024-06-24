@@ -105,13 +105,13 @@ class HexNet(nn.Module):
 
         # Determine the number of residual blocks based on the board size
         if board_size == 3:
-            num_blocks = 3
-        elif board_size == 4:
-            num_blocks = 4
-        elif board_size == 5:
             num_blocks = 5
-        elif board_size == 7:
+        elif board_size == 4:
             num_blocks = 6
+        elif board_size == 5:
+            num_blocks = 8
+        elif board_size == 7:
+            num_blocks = 10
         else:
             num_blocks = 5  # Default
 

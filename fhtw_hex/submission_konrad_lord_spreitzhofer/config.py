@@ -1,7 +1,7 @@
-BOARD_SIZE = 7            # This needs to be adjusted for train.py and script.py (which agent one want to train or play)
+BOARD_SIZE = 3            # This needs to be adjusted for train.py and script.py (which agent one want to train or play)
 
 #MCTS
-EPOCHS =20
+EPOCHS =50
 NUM_OF_GAMES_PER_EPOCH = 2
 MCTS_SIMULATIONS = 2
 TEMPERATURE_START = 1.0
@@ -13,7 +13,7 @@ EPSILON_END = 0.08        # Endvalue  for epsilon-greedy strategie
 #Neural Network
 POLICY_LOSS_WEIGHT = 1.10    # Initial weight for policy loss
 VALUE_LOSS_WEIGHT = 1.0      # Initial weight for value loss
-LEARNING_RATE = 0.0001
+LEARNING_RATE = 0.001
 WEIGHT_DECAY = 0.01
 BATCH_SIZE = 32
 WARMUP_EPOCHS = 10              # Number of warm-up epochs
