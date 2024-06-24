@@ -9,6 +9,7 @@ from copy import deepcopy
 from fhtw_hex import hex_engine as engine
 from fhtw_hex.submission_konrad_lord_spreitzhofer import config
 
+# Set the device to GPU if available, else CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -27,21 +28,26 @@ class Node:
         self.hex_position = self.create_hex_position(state)
 
     def create_hex_position(self, state):
+        # Initialize a HexPosition object with the current state
         temp_hex_position = self.hex_position_class(size=len(state))
         temp_hex_position.board = state
-        temp_hex_position.player = 1 if sum(sum(row) for row in state) == 0 else -1  # Determine the player
+        # Determine the player based on the state
+        temp_hex_position.player = 1 if sum(sum(row) for row in state) == 0 else -1
         return temp_hex_position
 
     def is_terminal(self):
+        # Check if the game has ended
         return self.hex_position.winner != 0
 
     def is_expanded(self):
+        # Check if the node has been expanded
         return len(self.children) > 0
 
     def expand(self, policy):
-        valid_actions = self.hex_position.get_action_space()  # Ensure only valid moves are considered
+        # Expand the node using the given policy
+        valid_actions = self.hex_position.get_action_space()
         for action, prob in zip(self.action_space, policy):
-            if action in valid_actions:  # Check if the action is valid
+            if action in valid_actions:
                 new_state = deepcopy(self.state)
                 temp_hex_position = self.create_hex_position(new_state)
                 temp_hex_position.moove(action)
@@ -51,13 +57,16 @@ class Node:
                 )
 
     def select_child(self, exploration_weight=1.0):
+        # Select the best child node based on the value
         return max(self.children, key=lambda x: x.value(exploration_weight))
 
     def update(self, value):
+        # Update the node's visit count and value sum
         self.visit_count += 1
         self.value_sum += value
 
     def value(self, exploration_weight=1.0):
+        # Calculate the node's value using the UCB1 formula
         epsilon = 1e-6
         if self.visit_count == 0:
             return float('inf')
@@ -68,16 +77,19 @@ class Node:
 
 
 class ResidualBlock(nn.Module):
-    def __init__(self, channels):
+    def __init__(self, channels, dropout_rate=0.15):
         super(ResidualBlock, self).__init__()
         self.conv1 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(channels)
         self.conv2 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
         self.bn2 = nn.BatchNorm2d(channels)
+        self.dropout = nn.Dropout(dropout_rate)
 
     def forward(self, x):
+        # Residual connection block with dropout
         residual = x
         out = F.relu(self.bn1(self.conv1(x)))
+        out = self.dropout(out)
         out = self.bn2(self.conv2(out))
         out += residual
         out = F.relu(out)
@@ -85,29 +97,31 @@ class ResidualBlock(nn.Module):
 
 
 class HexNet(nn.Module):
-    def __init__(self, board_size):
+    def __init__(self, board_size, dropout_rate=0.15):
         super(HexNet, self).__init__()
         self.board_size = board_size
         self.conv1 = nn.Conv2d(1, 128, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(128)
-        # Set the number of residual blocks based on the board size
+
+        # Determine the number of residual blocks based on the board size
         if board_size == 3:
-            num_blocks = 3
+            num_blocks = 8
         elif board_size == 4:
-            num_blocks = 4
+            num_blocks = 10
         elif board_size == 5:
-            num_blocks = 5
+            num_blocks = 12
         elif board_size == 7:
-            num_blocks = 6
+            num_blocks = 15
         else:
             num_blocks = 5  # Default
 
-        self.residual_blocks = nn.ModuleList([ResidualBlock(128) for _ in range(num_blocks)])
+        self.residual_blocks = nn.ModuleList([ResidualBlock(128, dropout_rate) for _ in range(num_blocks)])
         self.flatten = nn.Flatten()
         self.policy_head = nn.Linear(128 * board_size * board_size, board_size * board_size)
         self.value_head = nn.Linear(128 * board_size * board_size, 1)
 
     def forward(self, x):
+        # Forward pass through the network
         x = F.relu(self.bn1(self.conv1(x)))
         for block in self.residual_blocks:
             x = block(x)
@@ -117,8 +131,9 @@ class HexNet(nn.Module):
         return policy, value
 
 
-def create_model(board_size):
-    model = HexNet(board_size).to(device)
+def create_model(board_size, dropout_rate=0.15):
+    # Create and return a HexNet model
+    model = HexNet(board_size, dropout_rate).to(device)
     return model
 
 
@@ -134,6 +149,7 @@ class MCTS:
         self.model.to(self.device)
 
     def get_action(self, state, action_set):
+        # Get the best action using MCTS
         root = Node(state, action_set)
         for _ in range(self.simulations):
             self.search(root)
@@ -142,6 +158,7 @@ class MCTS:
         return max(root.children, key=lambda c: c.visit_count).action
 
     def search(self, node, exploration_weight=1.0):
+        # Perform MCTS search
         if node.is_terminal():
             return -node.state.winner
         if not node.is_expanded():
@@ -154,6 +171,7 @@ class MCTS:
         return -value
 
     def evaluate(self, node):
+        # Evaluate the node using the neural network
         board = np.array(node.state).reshape((1, 1, self.board_size, self.board_size)).astype(np.float32)
         board = torch.tensor(board, device=self.device)
         self.model.eval()
@@ -161,7 +179,7 @@ class MCTS:
             policy, value = self.model(board)
         policy = np.exp(policy.cpu().numpy()[0] / self.temperature)
 
-        # Check to prevent division by zero
+        # Normalize policy to prevent division by zero
         policy_sum = np.sum(policy)
         if policy_sum == 0:
             policy = np.ones_like(policy) / len(policy)
@@ -180,12 +198,14 @@ class SumTree:
         self.n_entries = 0
 
     def _propagate(self, idx, change):
+        # Update the tree with changes
         parent = (idx - 1) // 2
         self.tree[parent] += change
         if parent != 0:
             self._propagate(parent, change)
 
     def _retrieve(self, idx, s):
+        # Retrieve the leaf node for a sample
         left = 2 * idx + 1
         right = left + 1
         if left >= len(self.tree):
@@ -196,9 +216,11 @@ class SumTree:
             return self._retrieve(right, s - self.tree[left])
 
     def total(self):
+        # Get the total priority
         return self.tree[0]
 
     def add(self, p, data):
+        # Add new data with priority to the tree
         idx = self.write + self.capacity - 1
         self.data[self.write] = data
         self.update(idx, p)
@@ -209,11 +231,13 @@ class SumTree:
             self.n_entries += 1
 
     def update(self, idx, p):
+        # Update the priority of an existing data point
         change = p - self.tree[idx]
         self.tree[idx] = p
         self._propagate(idx, change)
 
     def get(self, s):
+        # Sample a data point based on its priority
         idx = self._retrieve(0, s)
         data_idx = idx - self.capacity + 1
         return idx, self.tree[idx], self.data[data_idx]
@@ -229,10 +253,12 @@ class PrioritizedReplayBuffer:
         self.epsilon = 1e-5
 
     def add(self, experience, td_error):
+        # Add an experience with its TD error as priority
         priority = (abs(td_error) + self.epsilon) ** self.alpha
         self.tree.add(priority, experience)
 
     def sample(self, batch_size, beta=0.4):
+        # Sample a batch of experiences, weighted by priority
         indices = []
         experiences = []
         weights = []
@@ -252,6 +278,7 @@ class PrioritizedReplayBuffer:
         return indices, experiences, weights
 
     def update_priorities(self, batch_indices, td_errors):
+        # Update the priorities of a batch of experiences
         for idx, td_error in zip(batch_indices, td_errors):
             priority = (abs(td_error) + self.epsilon) ** self.alpha
             self.tree.update(idx, priority)
@@ -262,10 +289,12 @@ class PrioritizedReplayBuffer:
 
 class RandomAgent:
     def get_action(self, board, action_space):
+        # Choose a random action from the action space
         return random.choice(action_space)
 
 
 def log_message(message):
+    # Print and log a message
     print(message)
     log_buffer.append(message)
 
@@ -274,14 +303,16 @@ log_buffer = []
 
 
 def save_log_to_file(log_path):
+    # Save the log buffer to a file
     with open(log_path, 'w') as f:
         for message in log_buffer:
             f.write(message + '\n')
 
 
 def agent(board, action_set):
+    # Agent function to get the action from the MCTS agent
     board_size = config.BOARD_SIZE
     model = create_model(board_size)
     model.load_state_dict(torch.load(config.MODEL, map_location=device))
-    model.to(device)  # Move the model to GPU
+    model.to(device)
     return MCTS(model).get_action(board, action_set)
