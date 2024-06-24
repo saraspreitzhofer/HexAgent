@@ -77,7 +77,7 @@ class Node:
 
 
 class ResidualBlock(nn.Module):
-    def __init__(self, channels, dropout_rate=0.15):
+    def __init__(self, channels, dropout_rate=0.00):
         super(ResidualBlock, self).__init__()
         self.conv1 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(channels)
@@ -97,7 +97,7 @@ class ResidualBlock(nn.Module):
 
 
 class HexNet(nn.Module):
-    def __init__(self, board_size, dropout_rate=0.15):
+    def __init__(self, board_size, dropout_rate=0.00):
         super(HexNet, self).__init__()
         self.board_size = board_size
         self.conv1 = nn.Conv2d(1, 128, kernel_size=3, padding=1)
@@ -131,7 +131,7 @@ class HexNet(nn.Module):
         return policy, value
 
 
-def create_model(board_size, dropout_rate=0.15):
+def create_model(board_size, dropout_rate=0.00):
     # Create and return a HexNet model
     model = HexNet(board_size, dropout_rate).to(device)
     return model
